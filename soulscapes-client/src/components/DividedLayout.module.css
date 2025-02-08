@@ -1,0 +1,58 @@
+/* src/components/DividedLayout.module.css */
+.container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  position: relative;
+}
+
+/* Orientation-specific flex directions */
+.container[data-orientation="vertical"] {
+  flex-direction: row;
+}
+.container[data-orientation="horizontal"] {
+  flex-direction: column;
+}
+
+/* The two resizable panes */
+.firstPane,
+.secondPane {
+  overflow: auto;
+}
+
+/* Divider styling:
+   The divider’s background bar is now 6px thick.
+   We use absolute positioning for the handle so that it always appears as a 24×24px circle. */
+.divider {
+  background: rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+  position: relative;
+  overflow: visible; /* Allow the handle (24px) to overflow the 6px bar */
+}
+
+.container[data-orientation="vertical"] .divider {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.container[data-orientation="horizontal"] .divider {
+  height: 6px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+/* Divider handle styling using absolute positioning */
+.dividerHandle {
+  background: black;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

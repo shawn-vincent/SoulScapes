@@ -1,19 +1,15 @@
 // src/pages/Room.js
-import React, { useState, useRef, useEffect } from 'react';
-import { List, ArrowsLeftRight } from '@phosphor-icons/react';
+import React, { useState, useEffect } from 'react';
+import { List } from '@phosphor-icons/react';
+import DividedLayout from '../components/DividedLayout';
 import MessageList from '../components/MessageList';
-import AvatarSpace from '../components/AvatarSpace';
-import SegmentedControl from '../components/SegmentedControl';
+import Avatar from '../components/Avatar';
 import styles from './Room.module.css';
 
 const Room = () => {
-  // For desktop: left panel width (default 25%)
-  const [leftWidth, setLeftWidth] = useState(25);
-  // For mobile: active segment (0 = left panel, 1 = right panel)
-  const [activeSegment, setActiveSegment] = useState(0);
+  const [activeSegment, setActiveSegment] = useState(0); // 0: MessageList, 1: Avatar area
   const [menuOpen, setMenuOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const containerRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -22,34 +18,8 @@ const Room = () => {
   }, []);
 
   const isMobile = windowWidth < 600;
-
   const toggleMenu = () => setMenuOpen((prev) => !prev);
-
-  // Desktop: Handle dragging of the left/right divider.
-  const onMouseDown = (e) => {
-    e.preventDefault();
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
-  const onMouseMove = (e) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    let newLeftWidth = ((e.clientX - rect.left) / rect.width) * 100;
-    if (newLeftWidth < 10) newLeftWidth = 10;
-    if (newLeftWidth > 90) newLeftWidth = 90;
-    setLeftWidth(newLeftWidth);
-  };
-
-  const onMouseUp = () => {
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  };
-
-  // Mobile: Update active segment.
-  const onSegmentChange = (segmentIndex) => {
-    setActiveSegment(segmentIndex);
-  };
+  const onSegmentChange = (segmentIndex) => setActiveSegment(segmentIndex);
 
   return (
     <div className={styles.room}>
@@ -66,7 +36,7 @@ const Room = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className={styles.mainContent} ref={containerRef}>
+      <div className={styles.mainContent}>
         {isMobile ? (
           // Mobile: Show one panel based on segmented control.
           activeSegment === 0 ? (
@@ -75,37 +45,41 @@ const Room = () => {
             </div>
           ) : (
             <div className={styles.panelMobile}>
-              <AvatarSpace />
+              <DividedLayout orientation="horizontal" initialPrimaryRatio={0.7}>
+                <div>
+                  {/* Top part of Avatar area */}
+                  Avatar Top Content
+                </div>
+                <div className={styles.avatarContainer}>
+                  {/* Bottom part of Avatar area: display the avatar */}
+                  <Avatar initials="JS" borderColor="#00f" />
+                </div>
+              </DividedLayout>
             </div>
           )
         ) : (
-          // Desktop: Show both panels side by side.
-          <>
-            <div
-              className={styles.panelLeft}
-              style={{ width: `${leftWidth}%` }}
-            >
-              <MessageList />
-            </div>
-            <div className={styles.divider} onMouseDown={onMouseDown}>
-              <div className={styles.dividerHandle}>
-                <ArrowsLeftRight size={16} weight="regular" color="#fff" />
+          // Desktop: Left panel is MessageList; right panel is the Avatar area.
+          <DividedLayout orientation="vertical" initialPrimaryRatio={0.25}>
+            <MessageList />
+            <DividedLayout orientation="horizontal" initialPrimaryRatio={0.7}>
+              <div>
+                {/* Top part of Avatar area */}
+                Avatar Top Content
               </div>
-            </div>
-            <div
-              className={styles.panelRight}
-              style={{ width: `${100 - leftWidth}%` }}
-            >
-              <AvatarSpace />
-            </div>
-          </>
+              <div className={styles.avatarContainer}>
+                {/* Bottom part of Avatar area: display the avatar */}
+                <Avatar initials="JS" borderColor="#00f" />
+              </div>
+            </DividedLayout>
+          </DividedLayout>
         )}
       </div>
 
       {/* (Optional) Segmented Control Bar for Mobile */}
       {isMobile && (
         <div className={styles.segmentedControlBar}>
-          <SegmentedControl active={activeSegment} onSelect={onSegmentChange} />
+          <button onClick={() => onSegmentChange(0)}>•</button>
+          <button onClick={() => onSegmentChange(1)}>•</button>
         </div>
       )}
 
