@@ -7,7 +7,6 @@ const AvatarLayout = React.forwardRef(({ children, className, style }, ref) => {
   return (
     <div className={className} style={style} ref={ref}>
       {children}
-      <ZoomControl />
     </div>
   );
 });

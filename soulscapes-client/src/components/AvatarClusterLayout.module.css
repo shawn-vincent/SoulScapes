@@ -95,8 +95,8 @@
 /* Zoom control wrapper: positioned at the top-right of the container */
 .zoomControlWrapper {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 16px;
+  right: 20px;
   width: 20px;
   height: 80px; /* matches avatarSize by default */
   pointer-events: auto;
