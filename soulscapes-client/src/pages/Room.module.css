@@ -1,0 +1,165 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap');
+
+.room {
+  font-family: 'Poppins', sans-serif;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/43/Mountain_top_scenic.jpg');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+/* ---------- Title Bar ---------- */
+.titleBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  z-index: 3;
+}
+
+.hamburger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+}
+
+.title {
+  margin-left: 10px;
+  color: #fff;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Input Bar ---------- */
+.inputContainer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.5);
+  z-index: 3;
+}
+
+.textInput {
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  margin: 4px;
+  background-color: rgb(255, 255, 255);
+  border: none;
+  color: #000;
+  font-size: 16px;
+  font-weight: bold;
+  outline: none;
+}
+
+/* ---------- Main Content Area ---------- */
+.mainContent {
+  position: absolute;
+  top: 30px;   /* below title bar */
+  bottom: 30px; /* default bottom offset */
+  left: 0;
+  right: 0;
+  display: flex;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Desktop Panels */
+.panelLeft {
+  height: 100%;
+  overflow-y: auto;
+  background: transparent;
+}
+
+.panelRight {
+  height: 100%;
+  overflow-y: auto;
+  background: transparent;
+}
+
+/* Draggable Divider (Desktop Only) */
+.divider {
+  width: 12px;
+  cursor: col-resize;
+  background: rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 10;
+}
+
+.dividerHandle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: black;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mobile Panel (Single Panel Display) */
+.panelMobile {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ---------- Side Menu ---------- */
+.sideMenu {
+  position: absolute;
+  top: 30px;
+  left: 0;
+  width: 250px;
+  height: calc(100vh - 30px - 30px);
+  background-color: rgba(0, 0, 0, 0.5);
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 2;
+}
+
+.sideMenu.open {
+  transform: translateX(0);
+}
+
+/* ---------- Segmented Control Bar (Mobile Only) ---------- */
+.segmentedControlBar {
+  position: absolute;
+  bottom: 30px; /* sits directly above the input bar */
+  left: 0;
+  width: 100%;
+  height: 30px;
+  background-color: rgba(0, 0, 0, 0.5); /* black transparent bar */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+/* ---------- Mobile Overrides ---------- */
+@media (max-width: 600px) {
+  /* Adjust mainContent bottom to accommodate segmented control and input bars */
+  .mainContent {
+    bottom: 60px; /* 30px for segmented control + 30px for input bar */
+  }
+}

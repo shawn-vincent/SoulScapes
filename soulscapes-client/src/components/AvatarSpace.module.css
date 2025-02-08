@@ -1,0 +1,41 @@
+/* src/components/AvatarSpace.module.css */
+.avatarSpace {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: transparent;
+  overflow: hidden;
+}
+
+.topSection {
+  width: 100%;
+  background: transparent;
+}
+
+.bottomSection {
+  width: 100%;
+  background: transparent;
+}
+
+/* Horizontal divider styling */
+.divider {
+  width: 100%;
+  height: 12px; /* same as dividerHeight */
+  background: rgba(0, 0, 0, 0.5); /* visible, semi-transparent black bar */
+  cursor: row-resize;
+  position: relative;
+}
+
+.dividerHandle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: black;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
