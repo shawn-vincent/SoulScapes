@@ -1,0 +1,12 @@
+/* src/components/AvatarClusterLayout.module.css */
+.avatarClusterLayout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.avatarWrapper {
+  /* Optionally, add transitions for smoother movement */
+  transition: transform 0.2s ease;
+}

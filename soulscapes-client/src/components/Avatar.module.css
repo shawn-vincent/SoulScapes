@@ -1,18 +1,38 @@
 /* src/components/Avatar.module.css */
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 10px var(--glow-color);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--glow-color);
+  }
+  100% {
+    box-shadow: 0 0 10px var(--glow-color);
+  }
+}
+
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
   border-radius: 50%;
+  border: 2px solid var(--border-color);
   background-color: black;
-  border: 2px solid;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.5); /* blurry drop shadow */
+  box-shadow: 0 0 5px var(--glow-color); /* Subtle default glow */
+  transition: box-shadow 0.3s ease-in-out;
 }
 
+/* Intensified glow on hover with pulsing animation */
+.avatar:hover {
+  box-shadow: 0 0 20px var(--glow-color), 0 0 40px var(--glow-color);
+  animation: pulseGlow 1.5s infinite alternate ease-in-out;
+}
+
+/* Initials styling */
 .initials {
   color: white;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: calc(var(--avatar-size) * 0.4);
+  font-weight: normal;
 }

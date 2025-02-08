@@ -1,0 +1,60 @@
+/* src/components/AvatarHorizontalGridLayout.module.css */
+
+/* The outer container for the grid and scroll buttons */
+.scrollContainer {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* The grid container itself */
+.avatarHorizontalGrid {
+  display: grid;
+  height: 100%;
+  gap: var(--avatar-gap, 10px);
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--grid-rows), var(--avatar-size, 80px));
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  align-content: center;  /* This centers the grid tracks vertically */
+}
+
+/* Scroll Button Styles */
+.scrollButton {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  width: 20px;                    
+  background-color: rgba(0, 0, 0, 0.6); /* Base: semi-transparent black */
+  border: none;
+  color: white;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  cursor: pointer;
+  z-index: 10;
+  border-radius: 10px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.scrollButton:hover {
+  background-color: rgba(128, 128, 128, 0.9); /* Medium gray, 90% opaque */
+  transform: scale(1.1);
+}
+
+.scrollButton:active {
+  background-color: rgba(128, 128, 128, 1);   /* Fully opaque medium gray */
+  transform: scale(0.95);
+}
+
+/* Left scroll button */
+.leftButton {
+  left: 15px;
+}
+
+/* Right scroll button, moved inward to make room for the zoom control */
+.rightButton {
+  right: 35px;
+}

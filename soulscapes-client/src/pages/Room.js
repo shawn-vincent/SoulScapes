@@ -4,10 +4,12 @@ import { List } from '@phosphor-icons/react';
 import DividedLayout from '../components/DividedLayout';
 import MessageList from '../components/MessageList';
 import Avatar from '../components/Avatar';
+import AvatarClusterLayout from '../components/AvatarClusterLayout';
+import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout';
 import styles from './Room.module.css';
 
 const Room = () => {
-  const [activeSegment, setActiveSegment] = useState(0); // 0: MessageList, 1: Avatar area
+  const [activeSegment, setActiveSegment] = useState(0); // 0: Message area, 1: Avatar area
   const [menuOpen, setMenuOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -20,6 +22,73 @@ const Room = () => {
   const isMobile = windowWidth < 600;
   const toggleMenu = () => setMenuOpen((prev) => !prev);
   const onSegmentChange = (segmentIndex) => setActiveSegment(segmentIndex);
+
+  // Render the message area (left pane).
+  const renderMessageArea = () => (
+    <div className={styles.messageArea}>
+      <MessageList />
+    </div>
+  );
+
+  // Render the avatar area (right pane), split horizontally:
+  // - Top: 80% for the cluster layout
+  // - Bottom: 20% for the horizontal grid layout
+  const renderAvatarArea = () => (
+    <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
+      {/* Top (80%) - Cluster */}
+      <div className={styles.avatarClusterContainer}>
+        <AvatarClusterLayout avatarSize={80}>
+          {Array.from({ length: 10 }, (_, i) => {
+            const letter = String.fromCharCode(65 + (i % 26));
+            const extra = i >= 26 ? i - 26 + 1 : '';
+            return (
+              <Avatar
+                key={`cluster-${i}`}
+                initials={letter + extra}
+                borderColor="#00f"
+                size={80}
+              />
+            );
+          })}
+        </AvatarClusterLayout>
+      </div>
+
+      {/* Bottom (20%) - Horizontal Grid */}
+      <div className={styles.avatarGridContainer}>
+        <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
+          {Array.from({ length: 20 }, (_, i) => {
+            const letter = String.fromCharCode(65 + (i % 26));
+            const extra = i >= 26 ? i - 26 + 1 : '';
+            return (
+              <Avatar
+                key={`grid-${i}`}
+                initials={letter + extra}
+                borderColor="#f00"
+                size={80}
+              />
+            );
+          })}
+        </AvatarHorizontalGridLayout>
+      </div>
+    </DividedLayout>
+  );
+
+  // Desktop layout: side-by-side vertical DividedLayout:
+  // - Left = Message Area
+  // - Right = Avatar Area
+  const renderDesktopContent = () => (
+    <DividedLayout orientation="vertical" initialPrimaryRatio={0.25}>
+      {renderMessageArea()}
+      {renderAvatarArea()}
+    </DividedLayout>
+  );
+
+  // Mobile layout: show one panel at a time based on a segmented control
+  const renderMobileContent = () => (
+    <div className={styles.panelMobile}>
+      {activeSegment === 0 ? renderMessageArea() : renderAvatarArea()}
+    </div>
+  );
 
   return (
     <div className={styles.room}>
@@ -37,45 +106,10 @@ const Room = () => {
 
       {/* Main Content Area */}
       <div className={styles.mainContent}>
-        {isMobile ? (
-          // Mobile: Show one panel based on segmented control.
-          activeSegment === 0 ? (
-            <div className={styles.panelMobile}>
-              <MessageList />
-            </div>
-          ) : (
-            <div className={styles.panelMobile}>
-              <DividedLayout orientation="horizontal" initialPrimaryRatio={0.7}>
-                <div>
-                  {/* Top part of Avatar area */}
-                  Avatar Top Content
-                </div>
-                <div className={styles.avatarContainer}>
-                  {/* Bottom part of Avatar area: display the avatar */}
-                  <Avatar initials="JS" borderColor="#00f" />
-                </div>
-              </DividedLayout>
-            </div>
-          )
-        ) : (
-          // Desktop: Left panel is MessageList; right panel is the Avatar area.
-          <DividedLayout orientation="vertical" initialPrimaryRatio={0.25}>
-            <MessageList />
-            <DividedLayout orientation="horizontal" initialPrimaryRatio={0.7}>
-              <div>
-                {/* Top part of Avatar area */}
-                Avatar Top Content
-              </div>
-              <div className={styles.avatarContainer}>
-                {/* Bottom part of Avatar area: display the avatar */}
-                <Avatar initials="JS" borderColor="#00f" />
-              </div>
-            </DividedLayout>
-          </DividedLayout>
-        )}
+        {isMobile ? renderMobileContent() : renderDesktopContent()}
       </div>
 
-      {/* (Optional) Segmented Control Bar for Mobile */}
+      {/* Segmented Control for Mobile */}
       {isMobile && (
         <div className={styles.segmentedControlBar}>
           <button onClick={() => onSegmentChange(0)}>•</button>
@@ -92,9 +126,13 @@ const Room = () => {
         />
       </div>
 
-      {/* Side Menu */}
-      <div className={`${styles.sideMenu} ${menuOpen ? styles.open : ''}`}>
+      {/* Side Menu (placed last to ensure higher stacking context) */}
+      <div
+        className={`${styles.sideMenu} ${menuOpen ? styles.open : ''}`}
+      >
         {/* Menu content goes here */}
+        <h4>Side Menu</h4>
+        <p>Menu content or navigation links can go here.</p>
       </div>
     </div>
   );
