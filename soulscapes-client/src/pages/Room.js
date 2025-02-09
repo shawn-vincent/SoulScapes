@@ -4,6 +4,7 @@ import { List } from '@phosphor-icons/react';
 import DividedLayout from '../components/DividedLayout';
 import MessageList from '../components/MessageList';
 import Avatar from '../components/Avatar';
+import ScrollLayout from '../components/ScrollLayout';
 import AvatarClusterLayout from '../components/AvatarClusterLayout';
 import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout';
 import styles from './Room.module.css';
@@ -33,36 +34,50 @@ const Room = () => {
   const renderAvatarArea = () => (
     <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
       {/* Top (80%) - Cluster */}
-      <div className={styles.avatarClusterContainer}>
-        <AvatarClusterLayout avatarSize={80}>
-          {Array.from({ length: 10 }, (_, i) => {
-            const letter = String.fromCharCode(65 + (i % 26));
-            const extra = i >= 26 ? i - 26 + 1 : '';
-            return (
-		<Avatar data={{
-			    key: `cluster-${i}`,
-			    initials: letter + extra,
-			    borderColor: "#00f",
-			    size: 80
-			}}
-		/>
-            );
-          })}
-        </AvatarClusterLayout>
+	<div className={styles.avatarClusterContainer}>
+	    <ScrollLayout>
+
+		{(true && <img src='https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Desert_Electric.jpg/1920px-Desert_Electric.jpg'/>)}
+		
+		{(false && 
+		<AvatarClusterLayout avatarSize={80}>
+		    {Array.from({ length: 10 }, (_, i) => {
+			const letter = String.fromCharCode(65 + (i % 26));
+			const extra = i >= 26 ? i - 26 + 1 : '';
+			return (
+			    <Avatar
+				key={`cluster-${i}`}
+				data={{
+					initials: letter + extra,
+					color: "#00f",
+					size: 80
+				    }}
+			    />
+			);
+		    })}
+		</AvatarClusterLayout>
+		 )}
+		
+	    </ScrollLayout>
       </div>
 
       {/* Bottom (20%) - Horizontal Grid */}
-      <div className={styles.avatarGridContainer}>
-          <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
-		<Avatar data={{
-			    key:"self",
-			    initials: "You",
-			    borderColor: "#f00",
-			    size: 80,
-			    local: true
-			}}/>
-          </AvatarHorizontalGridLayout>
-      </div>
+	<div className={styles.avatarGridContainer}>
+	  <ScrollLayout top={false} bottom={false}>
+              <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
+		  <Avatar data={{
+			      key:"self",
+			      initials: "You",
+			      color: "#f00",
+			      size: 80,
+			      local: true
+			  }}/>
+		  <Avatar key="1" data={{initials: "1", color: "#00f", size: 80}} />
+		  <Avatar key="2" data={{initials: "2", color: "#00f", size: 80}} />
+		  <Avatar key="3" data={{initials: "3", color: "#00f", size: 80}} />
+              </AvatarHorizontalGridLayout>
+	  </ScrollLayout>
+	</div>
     </DividedLayout>
   );
 

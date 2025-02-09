@@ -11,7 +11,6 @@
 .scrollContainer {
   width: 100%;
   height: 100%;
-  overflow-x: auto;
   scroll-behavior: smooth;
 }
 
@@ -19,57 +18,9 @@
 .avatarHorizontalGrid {
   display: grid;
   height: 100%;
+  width: max-content; /* Makes the grid only as wide as its content */
   gap: var(--avatar-gap, 10px);
   grid-auto-flow: column;
   grid-template-rows: repeat(var(--grid-rows), var(--avatar-size, 80px));
-}
-
-/* Common scroll button styles */
-.scrollButton {
-  position: absolute;
-  top: 20px;
-  bottom: 20px;
-  width: 20px;
-  background-color: rgba(0, 0, 0, 0.6);
-  border: none;
-  color: white;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 20;
-  border-radius: 10px;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-.scrollButton:hover {
-  background-color: rgba(128, 128, 128, 0.9);
-  transform: scale(1.1);
-}
-
-.scrollButton:active {
-  background-color: rgba(128, 128, 128, 1);
-  transform: scale(0.95);
-}
-
-/* Left scroll button flush with the container’s left edge */
-.leftButton {
-  left: 0;
-}
-
-/* Right scroll button flush with the container’s right edge */
-.rightButton {
-  right: 0;
-}
-
-/* Zoom control wrapper: inset from the top-right edge */
-.zoomControlWrapper {
-  position: absolute;
-  top: 5px;
-  right: 20px;
-  width: 20px;
-  height: 80px; /* typically matching avatarSize */
-  pointer-events: auto;
-  z-index: 20;
+  align-content: center;
 }

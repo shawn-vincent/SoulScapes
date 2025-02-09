@@ -33,34 +33,19 @@ const AvatarHorizontalGridLayout = ({ children, initialSize = 80, gap = 10 }) =>
     }
   };
 
-  // Update scroll button visibility.
-  const updateScrollButtons = () => {
-    if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-      setShowLeft(scrollLeft > 0);
-      setShowRight(scrollLeft + clientWidth < scrollWidth);
-    }
-  };
-
   useEffect(() => {
     if (!scrollContainerRef.current) return;
     updateRows();
-    updateScrollButtons();
 
     const resizeObserver = new ResizeObserver(() => {
       updateRows();
-      updateScrollButtons();
     });
     resizeObserver.observe(scrollContainerRef.current);
 
     const currentContainer = scrollContainerRef.current;
-    currentContainer.addEventListener('scroll', updateScrollButtons);
-    window.addEventListener('resize', updateScrollButtons);
 
     return () => {
       resizeObserver.disconnect();
-      currentContainer.removeEventListener('scroll', updateScrollButtons);
-      window.removeEventListener('resize', updateScrollButtons);
     };
   }, [avatarSize, gap]);
 
@@ -95,30 +80,6 @@ const AvatarHorizontalGridLayout = ({ children, initialSize = 80, gap = 10 }) =>
         </AvatarLayout>
       </div>
 
-      {showLeft && (
-        <button
-          className={`${styles.scrollButton} ${styles.leftButton}`}
-          onClick={() => scrollByAmount(-1)}
-        >
-          &#9664;
-        </button>
-      )}
-      {showRight && (
-        <button
-          className={`${styles.scrollButton} ${styles.rightButton}`}
-          onClick={() => scrollByAmount(1)}
-        >
-          &#9654;
-        </button>
-      )}
-
-      <div className={styles.zoomControlWrapper}>
-        <ZoomControl
-          onZoomIn={handleZoomIn}
-          onZoomFit={handleZoomFit}
-          onZoomOut={handleZoomOut}
-        />
-      </div>
     </div>
   );
 };

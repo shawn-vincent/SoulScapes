@@ -5,16 +5,6 @@ import { X } from '@phosphor-icons/react'; // Import the close icon from Phospho
 const Avatar = ({ data , onUpdate }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Ensure `data` has default values to avoid undefined errors
-  //   const avatarData = {
-  // 	key: '', // default kKey
-  //     borderColor: '#ccc', // Default color
-  //     initials: 'A', // Default initials
-  //     size: 80, // default size
-  //     local: false, // default "local"
-  //     ...data, // Override with provided data
-  // };
-
   const handleAvatarClick = () => {
     setIsModalOpen(true);
   };
@@ -28,8 +18,6 @@ const Avatar = ({ data , onUpdate }) => {
     setIsModalOpen(false);
   };
 
-    console.log (data.borderColor);
-    
   return (
     <>
       <div onClick={handleAvatarClick} style={{ cursor: 'pointer' }}>
@@ -39,8 +27,7 @@ const Avatar = ({ data , onUpdate }) => {
 		 height: `${data.size}px`,
 		 borderRadius: '50%',
 		 backgroundColor: "black",
-		 borderColor: data.borderColor,
-		 border: `solid ${data.borderColor} 3px`,
+		 border: `solid ${data.color} 3px`,
 		 display: 'flex',
 		 alignItems: 'center',
 		 justifyContent: 'center',
