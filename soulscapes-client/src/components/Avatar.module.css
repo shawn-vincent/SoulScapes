@@ -22,6 +22,8 @@
   justify-content: center;
   box-shadow: 0 0 5px var(--glow-color); /* Subtle default glow */
   transition: box-shadow 0.3s ease-in-out;
+  width: var(--avatar-size, 80px);
+  height: var(--avatar-size, 80px);
 }
 
 /* Intensified glow on hover with pulsing animation */

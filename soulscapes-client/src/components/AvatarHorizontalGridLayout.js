@@ -5,23 +5,35 @@ import AvatarLayout from './AvatarLayout';
 import ZoomControl from './ZoomControl';
 import styles from './AvatarHorizontalGridLayout.module.css';
 
-const AvatarHorizontalGridLayout = ({ children, avatarSize = 80, gap = 10 }) => {
+const AvatarHorizontalGridLayout = ({ children, initialSize = 80, gap = 10 }) => {
+  // State for the current avatar size.
+  const [avatarSize, setAvatarSize] = useState(initialSize);
   const scrollContainerRef = useRef(null);
   const [rows, setRows] = useState(1);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
 
-  // Update number of rows that can fit in the container.
+  // Zoom callbacks.
+  const handleZoomIn = () => {
+    setAvatarSize(prev => prev * 1.1);
+  };
+  const handleZoomOut = () => {
+    setAvatarSize(prev => prev / 1.1);
+  };
+  const handleZoomFit = () => {
+    setAvatarSize(initialSize);
+  };
+
+  // Update number of rows based on container height.
   const updateRows = () => {
     if (scrollContainerRef.current) {
       const containerHeight = scrollContainerRef.current.clientHeight;
-      // Each row requires avatarSize + gap (except possibly the last row)
       const newRows = Math.max(1, Math.floor((containerHeight + gap) / (avatarSize + gap)));
       setRows(newRows);
     }
   };
 
-  // Update visibility of scroll buttons based on scroll position.
+  // Update scroll button visibility.
   const updateScrollButtons = () => {
     if (scrollContainerRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
@@ -52,7 +64,7 @@ const AvatarHorizontalGridLayout = ({ children, avatarSize = 80, gap = 10 }) => 
     };
   }, [avatarSize, gap]);
 
-  // Scroll by 75% of the container's width.
+  // Simple scroll function.
   const scrollByAmount = (direction) => {
     if (scrollContainerRef.current) {
       const amount = scrollContainerRef.current.clientWidth * 0.75;
@@ -60,23 +72,29 @@ const AvatarHorizontalGridLayout = ({ children, avatarSize = 80, gap = 10 }) => 
     }
   };
 
+  // Clone children to pass the updated size prop.
+  const updatedChildren = React.Children.map(children, (child) => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, { size: avatarSize });
+    }
+    return child;
+  });
+
   return (
     <div className={styles.container}>
-      {/* The scrollable container */}
       <div className={styles.scrollContainer} ref={scrollContainerRef}>
         <AvatarLayout
           className={styles.avatarHorizontalGrid}
           style={{
             '--grid-rows': rows,
             '--avatar-size': `${avatarSize}px`,
-            '--avatar-gap': `${gap}px`
+            '--avatar-gap': `${gap}px`,
           }}
         >
-          {children}
+          {updatedChildren}
         </AvatarLayout>
       </div>
 
-      {/* Left and Right scroll buttons */}
       {showLeft && (
         <button
           className={`${styles.scrollButton} ${styles.leftButton}`}
@@ -94,9 +112,12 @@ const AvatarHorizontalGridLayout = ({ children, avatarSize = 80, gap = 10 }) => 
         </button>
       )}
 
-      {/* Zoom control – note its position (inset) is now swapped relative to the right scroll */}
       <div className={styles.zoomControlWrapper}>
-        <ZoomControl />
+        <ZoomControl
+          onZoomIn={handleZoomIn}
+          onZoomFit={handleZoomFit}
+          onZoomOut={handleZoomOut}
+        />
       </div>
     </div>
   );
@@ -104,7 +125,7 @@ const AvatarHorizontalGridLayout = ({ children, avatarSize = 80, gap = 10 }) => 
 
 AvatarHorizontalGridLayout.propTypes = {
   children: PropTypes.node,
-  avatarSize: PropTypes.number,
+  initialSize: PropTypes.number,
   gap: PropTypes.number,
 };
 

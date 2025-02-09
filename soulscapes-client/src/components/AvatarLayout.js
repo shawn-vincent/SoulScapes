@@ -1,11 +1,12 @@
 // src/components/AvatarLayout.js
-import React from 'react';
+import React, { useRef, useImperativeHandle } from 'react';
 import PropTypes from 'prop-types';
-import ZoomControl from './ZoomControl';
 
 const AvatarLayout = React.forwardRef(({ children, className, style }, ref) => {
+  const innerRef = useRef();
+
   return (
-    <div className={className} style={style} ref={ref}>
+    <div className={className} style={style} ref={innerRef}>
       {children}
     </div>
   );

@@ -1,22 +1,64 @@
-// src/components/AvatarClusterLayout.js
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import {
   forceSimulation,
-  forceCenter,
   forceCollide,
   forceX,
   forceY,
 } from 'd3-force';
-import AvatarLayout from './AvatarLayout'; // Base layout (does not render controls itself)
+import AvatarLayout from './AvatarLayout';
 import ZoomControl from './ZoomControl';
 import styles from './AvatarClusterLayout.module.css';
 
-const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
-  const outerRef = useRef(null); // Outer scrollable container
-  const [initialDimensions, setInitialDimensions] = useState(null);
-  const [maxDimensions, setMaxDimensions] = useState(null);
+const AvatarClusterLayout = ({ children, initialSize = 80, margin = 20 }) => {
+  // State for the current avatar size.
+  const [avatarSize, setAvatarSize] = useState(initialSize);
+
+  // Zoom callbacks.
+  const handleZoomIn = () => setAvatarSize((prev) => prev * 1.1);
+  const handleZoomOut = () => setAvatarSize((prev) => prev / 1.1);
+  const handleZoomFit = () => setAvatarSize(initialSize);
+
+  // Container measurement.
+  const outerRef = useRef(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!outerRef.current) return;
+    const updateSize = () => {
+      if (!outerRef.current) return;
+      const { clientWidth, clientHeight } = outerRef.current;
+      if (clientWidth && clientHeight) {
+        setContainerSize({ width: clientWidth, height: clientHeight });
+      }
+    };
+    updateSize();
+    const resizeObs = new ResizeObserver(() => updateSize());
+    resizeObs.observe(outerRef.current);
+    return () => resizeObs.disconnect();
+  }, []);
+
+  // Convert children into an array of objects with unique IDs.
+  // If the child already has a key, use it; otherwise, generate one.
+  const childArray = useMemo(() => {
+    return React.Children.toArray(children).map((child, index) => {
+      const id = child.key != null ? child.key : `child-${index}`;
+      return { id, element: child };
+    });
+  }, [children]);
+
+  // Build a mapping from each child's unique ID to a cloned element (with updated avatar size).
+  const updatedChildMap = useMemo(() => {
+    const map = {};
+    childArray.forEach((child) => {
+      map[child.id] = React.cloneElement(child.element, { size: avatarSize });
+    });
+    return map;
+  }, [childArray, avatarSize]);
+
+  // State for simulation nodes.
   const [nodes, setNodes] = useState([]);
+
+  // For overlay scroll/size calculations.
   const [contentSize, setContentSize] = useState({
     width: 0,
     height: 0,
@@ -30,47 +72,39 @@ const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
     right: false,
   });
 
-  // Memoize children array.
-  const childArray = useMemo(() => React.Children.toArray(children), [children]);
-
-  // Helper: Compute bounding box of nodes.
+  // Utility: Compute bounding box.
   const computeBoundingBox = (nodesArr) => {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    nodesArr.forEach((node) => {
-      minX = Math.min(minX, node.x);
-      maxX = Math.max(maxX, node.x);
-      minY = Math.min(minY, node.y);
-      maxY = Math.max(maxY, node.y);
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    nodesArr.forEach((n) => {
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y);
     });
     return { minX, maxX, minY, maxY };
   };
 
-  // Helper: Update contentSize based on nodes and maxDimensions.
-  const updateContentSize = (nodesArr) => {
-    if (!maxDimensions || nodesArr.length === 0) return;
-    const { width: containerWidth, height: containerHeight } = maxDimensions;
-    const { minX, maxX, minY, maxY } = computeBoundingBox(nodesArr);
-    const computedWidth = (maxX - minX) + 2 * margin;
-    const computedHeight = (maxY - minY) + 2 * margin;
-    const contentWidth = Math.max(computedWidth, containerWidth);
-    const contentHeight = Math.max(computedHeight, containerHeight);
-    // Instead of using the computed bounding box to compute offsets,
-    // we align the center of nodes to the container center.
-    const containerCenterX = containerWidth / 2;
-    const containerCenterY = containerHeight / 2;
-    const nodesCenterX = (minX + maxX) / 2;
-    const nodesCenterY = (minY + maxY) / 2;
-    const offsetX = containerCenterX - nodesCenterX;
-    const offsetY = containerCenterY - nodesCenterY;
+  // Utility: Update content size (for scroll overlays).
+  const updateContentSize = (nodeArr) => {
+    if (!containerSize.width || !containerSize.height || nodeArr.length === 0) return;
+    const { minX, maxX, minY, maxY } = computeBoundingBox(nodeArr);
+    const computedWidth = maxX - minX + 2 * margin;
+    const computedHeight = maxY - minY + 2 * margin;
+    const contentWidth = Math.max(computedWidth, containerSize.width);
+    const contentHeight = Math.max(computedHeight, containerSize.height);
+    const offsetX = containerSize.width / 2 - (minX + maxX) / 2;
+    const offsetY = containerSize.height / 2 - (minY + maxY) / 2;
     setContentSize({ width: contentWidth, height: contentHeight, offsetX, offsetY });
   };
 
-  // Helper: Update scroll button visibility using current container scroll.
-  const updateScrollButtons = (nodesArr) => {
-    if (!outerRef.current || nodesArr.length === 0) return;
+  // Utility: Update scroll button state.
+  const updateScrollButtons = (nodeArr) => {
+    if (!outerRef.current || nodeArr.length === 0) return;
     const { scrollLeft, scrollTop, clientWidth, clientHeight } = outerRef.current;
-    const { minX, maxX, minY, maxY } = computeBoundingBox(nodesArr);
-    // Adjust bounding box by the computed offsets.
+    const { minX, maxX, minY, maxY } = computeBoundingBox(nodeArr);
     const boxLeft = minX + contentSize.offsetX;
     const boxRight = maxX + contentSize.offsetX;
     const boxTop = minY + contentSize.offsetY;
@@ -83,129 +117,145 @@ const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
     });
   };
 
-  // Effect 1: On mount, measure the container dimensions.
-  useEffect(() => {
-    if (outerRef.current) {
-      const { clientWidth, clientHeight } = outerRef.current;
-      const dims = { width: clientWidth, height: clientHeight };
-      if (!initialDimensions) {
-        setInitialDimensions(dims);
-        setMaxDimensions(dims);
-      }
-    }
-  }, [initialDimensions]);
+  // Force simulation strengths.
+  const strengthX = 0.1;
+  const strengthY = 0.1;
+  const strengthCollide = .5;
+  const strengthAlpha = 0.3;
 
-  // Effect 2: Use ResizeObserver to update maxDimensions if container grows.
+  // Initialize simulation and store it in a ref.
+  const simulationRef = useRef(null);
+  if (!simulationRef.current) {
+    simulationRef.current = forceSimulation(
+      childArray.map((child) => ({
+        id: child.id,
+        x: 0,
+        y: 0,
+        zoomed: false,
+      }))
+    )
+      .force('collide', forceCollide(avatarSize / 2 + 5).strength(strengthCollide))
+      .force('x', forceX(0).strength(strengthX))
+      .force('y', forceY(0).strength(strengthY))
+      .alpha(strengthAlpha);
+  }
+
+  // Update simulation when container size or children change.
   useEffect(() => {
-    if (!outerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        const { clientWidth, clientHeight } = entry.target;
-        setMaxDimensions((prev) => {
-          const newDims = {
-            width: Math.max(prev ? prev.width : 0, clientWidth),
-            height: Math.max(prev ? prev.height : 0, clientHeight),
-          };
-          // Also update scroll buttons when container size changes.
-          updateScrollButtons(nodes);
-          return newDims;
-        });
+    const { width, height } = containerSize;
+    if (width === 0 || height === 0 || childArray.length === 0) return;
+
+    const sim = simulationRef.current;
+    const currentNodes = sim.nodes();
+
+    // Reclaim existing nodes by matching on the unique ID.
+    const newNodes = childArray.map((child) => {
+      const existingNode = currentNodes.find((n) => n.id === child.id);
+      if (existingNode) {
+        return { ...existingNode, id: child.id };
+      } else {
+        return {
+          id: child.id,
+          x: width / 2,
+          y: height / 2,
+          zoomed: false,
+        };
       }
     });
-    observer.observe(outerRef.current);
-    return () => observer.disconnect();
-  }, [nodes]);
 
-  // Effect 3: Run the force simulation once when the children change.
-  useEffect(() => {
-    if (!initialDimensions || childArray.length === 0) return;
-    const { width, height } = initialDimensions;
-    const initialNodes = childArray.map((child, i) => ({
-      id: i,
-      x: width / 2,
-      y: height / 2,
-    }));
-    setNodes(initialNodes);
+    sim.nodes(newNodes)
+      .force('collide', forceCollide(avatarSize / 2 + 5).strength(strengthCollide))
+      .force('x', forceX(width / 2).strength(strengthX))
+      .force('y', forceY(height / 2).strength(strengthY))
+      .alpha(strengthAlpha);
 
-    const simulation = forceSimulation(initialNodes)
-      .force('center', forceCenter(width / 2, height / 2))
-      .force('collide', forceCollide(avatarSize / 2 + 5))
-      .force('x', forceX(width / 2).strength(0.05))
-      .force('y', forceY(height / 2).strength(0.05));
-
-    simulation.on('tick', () => {
-      const currentNodes = [...simulation.nodes()];
-      setNodes(currentNodes);
+    sim.on('tick', () => {
+      const currentNodes = sim.nodes();
+      setNodes([...currentNodes]);
       updateContentSize(currentNodes);
       updateScrollButtons(currentNodes);
     });
 
-    const timer = setTimeout(() => simulation.stop(), 2000);
-    return () => {
-      clearTimeout(timer);
-      simulation.stop();
-    };
-  }, [childArray.length, initialDimensions, avatarSize]);
+    return () => sim.stop();
+  }, [containerSize.width, containerSize.height, childArray, avatarSize]);
 
-  // Effect 4: Listen to scroll events to update scroll button visibility.
+  // Update center force on container resize.
   useEffect(() => {
-    const handleScroll = () => updateScrollButtons(nodes);
+    const { width, height } = containerSize;
+    if (simulationRef.current && width && height) {
+      simulationRef.current.force('x', forceX(width / 2).strength(strengthX));
+      simulationRef.current.force('y', forceY(height / 2).strength(strengthY));
+      simulationRef.current.alpha(strengthAlpha).restart();
+    }
+  }, [containerSize]);
+
+  // Update collision force when avatarSize changes.
+  useEffect(() => {
+    if (simulationRef.current) {
+      simulationRef.current.force('collide', forceCollide(avatarSize / 2 + 5).strength(strengthCollide));
+      simulationRef.current.alpha(strengthAlpha).restart();
+    }
+  }, [avatarSize]);
+
+  // Listen for scroll events.
+  useEffect(() => {
+    const handleScroll = () => updateScrollButtons(simulationRef.current.nodes());
     if (outerRef.current) {
       outerRef.current.addEventListener('scroll', handleScroll);
     }
     return () => {
-      if (outerRef.current) {
+      if (outerRef.current)
         outerRef.current.removeEventListener('scroll', handleScroll);
-      }
     };
   }, [nodes, contentSize]);
 
-  // Scroll function: scroll 75% of container's width/height.
+  // Scrolling helper.
   const scrollByAmount = (dx, dy) => {
     if (outerRef.current) {
       outerRef.current.scrollBy({ left: dx, top: dy, behavior: 'smooth' });
     }
   };
 
+  // Render.
   return (
     <div className={styles.container}>
-      {/* Outer scrollable container for simulation content */}
       <div className={styles.outerContainer} ref={outerRef}>
-        <div
+        <AvatarLayout
           className={styles.simulationContent}
           style={{
             width: contentSize.width,
             height: contentSize.height,
             position: 'relative',
+            '--avatar-size': `${avatarSize}px`,
           }}
         >
-          {nodes.map((node, i) => (
-            <div
-              key={node.id}
-              className={styles.avatarWrapper}
-              style={{
-                position: 'absolute',
-                left: node.x - avatarSize / 2 + contentSize.offsetX,
-                top: node.y - avatarSize / 2 + contentSize.offsetY,
-                width: avatarSize,
-                height: avatarSize,
-              }}
-            >
-              {childArray[i]}
-            </div>
-          ))}
-        </div>
+          {nodes.map((node) => {
+            const childEl = updatedChildMap[node.id];
+            return (
+              <div
+                key={node.id}
+                className={styles.avatarWrapper}
+                style={{
+                  position: 'absolute',
+                  left: node.x - avatarSize / 2 + contentSize.offsetX,
+                  top: node.y - avatarSize / 2 + contentSize.offsetY,
+                  width: avatarSize,
+                  height: avatarSize,
+                }}
+              >
+                {childEl}
+              </div>
+            );
+          })}
+        </AvatarLayout>
       </div>
-
-      {/* Overlay controls: scroll buttons and zoom control are rendered relative to .container */}
       <div className={styles.overlayControls}>
         {scrollButtons.top && (
           <button
             className={`${styles.scrollButton} ${styles.topButton}`}
-            onClick={() => {
-              const h = outerRef.current.clientHeight;
-              scrollByAmount(0, -0.75 * h);
-            }}
+            onClick={() =>
+              scrollByAmount(0, -0.75 * outerRef.current.clientHeight)
+            }
           >
             &#9650;
           </button>
@@ -213,10 +263,9 @@ const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
         {scrollButtons.bottom && (
           <button
             className={`${styles.scrollButton} ${styles.bottomButton}`}
-            onClick={() => {
-              const h = outerRef.current.clientHeight;
-              scrollByAmount(0, 0.75 * h);
-            }}
+            onClick={() =>
+              scrollByAmount(0, 0.75 * outerRef.current.clientHeight)
+            }
           >
             &#9660;
           </button>
@@ -224,10 +273,9 @@ const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
         {scrollButtons.left && (
           <button
             className={`${styles.scrollButton} ${styles.leftButton}`}
-            onClick={() => {
-              const w = outerRef.current.clientWidth;
-              scrollByAmount(-0.75 * w, 0);
-            }}
+            onClick={() =>
+              scrollByAmount(-0.75 * outerRef.current.clientWidth, 0)
+            }
           >
             &#9664;
           </button>
@@ -235,28 +283,28 @@ const AvatarClusterLayout = ({ children, avatarSize = 80, margin = 20 }) => {
         {scrollButtons.right && (
           <button
             className={`${styles.scrollButton} ${styles.rightButton}`}
-            onClick={() => {
-              const w = outerRef.current.clientWidth;
-              scrollByAmount(0.75 * w, 0);
-            }}
+            onClick={() =>
+              scrollByAmount(0.75 * outerRef.current.clientWidth, 0)
+            }
           >
             &#9654;
           </button>
         )}
       </div>
-
-      {/* Overlay Zoom Control: rendered relative to the container (top-right) */}
       <div className={styles.zoomControlWrapper}>
-        <ZoomControl />
+        <ZoomControl
+          onZoomIn={handleZoomIn}
+          onZoomFit={handleZoomFit}
+          onZoomOut={handleZoomOut}
+        />
       </div>
     </div>
   );
-    
 };
 
 AvatarClusterLayout.propTypes = {
   children: PropTypes.node,
-  avatarSize: PropTypes.number,
+  initialSize: PropTypes.number,
   margin: PropTypes.number,
 };
 

@@ -1,4 +1,4 @@
-// src/pages/Room.js
+ // src/pages/Room.js
 import React, { useState, useEffect } from 'react';
 import { List } from '@phosphor-icons/react';
 import DividedLayout from '../components/DividedLayout';
@@ -9,7 +9,6 @@ import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout
 import styles from './Room.module.css';
 
 const Room = () => {
-  const [activeSegment, setActiveSegment] = useState(0); // 0: Message area, 1: Avatar area
   const [menuOpen, setMenuOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -19,9 +18,7 @@ const Room = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const isMobile = windowWidth < 600;
   const toggleMenu = () => setMenuOpen((prev) => !prev);
-  const onSegmentChange = (segmentIndex) => setActiveSegment(segmentIndex);
 
   // Render the message area (left pane).
   const renderMessageArea = () => (
@@ -55,20 +52,9 @@ const Room = () => {
 
       {/* Bottom (20%) - Horizontal Grid */}
       <div className={styles.avatarGridContainer}>
-        <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
-          {Array.from({ length: 20 }, (_, i) => {
-            const letter = String.fromCharCode(65 + (i % 26));
-            const extra = i >= 26 ? i - 26 + 1 : '';
-            return (
-              <Avatar
-                key={`grid-${i}`}
-                initials={letter + extra}
-                borderColor="#f00"
-                size={80}
-              />
-            );
-          })}
-        </AvatarHorizontalGridLayout>
+          <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
+	      <Avatar local={true} key="self" initials="You" borderColor="#f00"/>
+          </AvatarHorizontalGridLayout>
       </div>
     </DividedLayout>
   );
@@ -81,13 +67,6 @@ const Room = () => {
       {renderMessageArea()}
       {renderAvatarArea()}
     </DividedLayout>
-  );
-
-  // Mobile layout: show one panel at a time based on a segmented control
-  const renderMobileContent = () => (
-    <div className={styles.panelMobile}>
-      {activeSegment === 0 ? renderMessageArea() : renderAvatarArea()}
-    </div>
   );
 
   return (
@@ -106,16 +85,8 @@ const Room = () => {
 
       {/* Main Content Area */}
       <div className={styles.mainContent}>
-        {isMobile ? renderMobileContent() : renderDesktopContent()}
+        {renderDesktopContent()}
       </div>
-
-      {/* Segmented Control for Mobile */}
-      {isMobile && (
-        <div className={styles.segmentedControlBar}>
-          <button onClick={() => onSegmentChange(0)}>•</button>
-          <button onClick={() => onSegmentChange(1)}>•</button>
-        </div>
-      )}
 
       {/* Input Bar */}
       <div className={styles.inputContainer}>

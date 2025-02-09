@@ -3,12 +3,12 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import styles from './Avatar.module.css';
 
-const Avatar = ({ initials, borderColor = '#00f', size = 80 }) => {
+const Avatar = ({ initials, borderColor = '#00f', size = 80, local=false }) => {
   return (
     <div
       className={styles.avatar}
       style={{
-        '--avatar-size': `${size}px`,
+        //'--avatar-size': `${size}px`,
         '--border-color': borderColor,
         '--glow-color': borderColor + '80', // Add transparency to the glow
       }}
@@ -19,9 +19,10 @@ const Avatar = ({ initials, borderColor = '#00f', size = 80 }) => {
 };
 
 Avatar.propTypes = {
-  initials: PropTypes.string.isRequired,
-  borderColor: PropTypes.string,
-  size: PropTypes.number,
+    initials: PropTypes.string.isRequired,
+    borderColor: PropTypes.string,
+    size: PropTypes.number,
+    local: PropTypes.bool
 };
 
 export default Avatar;
