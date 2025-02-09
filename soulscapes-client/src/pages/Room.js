@@ -9,11 +9,19 @@ import AvatarClusterLayout from '../components/AvatarClusterLayout';
 import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout';
 import styles from './Room.module.css';
 
+import roomManager from "../services/RoomManager";
+import localAvatarManager from "../services/LocalAvatarManager";
+import remoteAvatarManager from "../services/RemoteAvatarManager";
+
+
 const Room = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   useEffect(() => {
+
+    roomManager.joinRoom("lobby"); // XXX test name
+	
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -37,9 +45,11 @@ const Room = () => {
 	<div className={styles.avatarClusterContainer}>
 	    <ScrollLayout>
 
-		{(true && <img src='https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Desert_Electric.jpg/1920px-Desert_Electric.jpg'/>)}
+		{ // debugging scrolling nice to have just some big simple object.
+		  (false && <img src='https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Desert_Electric.jpg/1920px-Desert_Electric.jpg'/>)
+		}
 		
-		{(false && 
+		{(true && 
 		<AvatarClusterLayout avatarSize={80}>
 		    {Array.from({ length: 10 }, (_, i) => {
 			const letter = String.fromCharCode(65 + (i % 26));
@@ -112,10 +122,11 @@ const Room = () => {
 
       {/* Input Bar */}
       <div className={styles.inputContainer}>
-        <input
-          type="text"
-          className={styles.textInput}
-          placeholder="Type a message..."
+          <input
+	      id="commandLine"
+              type="text"
+              className={styles.textInput}
+              placeholder="Type a message..."
         />
       </div>
 

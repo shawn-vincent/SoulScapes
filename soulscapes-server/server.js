@@ -1,24 +1,48 @@
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 
 const app = express();
-const PORT = 4000;
-
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// API endpoint
-app.get('/api/init', (req, res) => {
-  // Simulate connecting to an external web service
-  setTimeout(() => {
-    res.json({ message: 'Initialization complete' });
-  }, 1000);
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" },
 });
 
-app.listen(PORT, () => {
-  console.log(`Soulscapes Server running on port ${PORT}`);
+const rooms = {}; // Track users and their avatars
+const log = (msg, emoji = "🖥️") => console.log(`[${new Date().toISOString()}] ${emoji} ${msg}`);
+
+const roomsNamespace = io.of("/rooms");
+
+roomsNamespace.on("connection", (socket) => {
+  log(`User connected: ${socket.id} 🌍`);
+
+  socket.on("join-room", ({ room, avatarData }) => {
+    socket.join(room);
+    avatarData.id = socket.id;
+    rooms[room] = rooms[room] || {};
+    rooms[room][socket.id] = avatarData;
+
+    log(`${socket.id} joined room "${room}" as ${avatarData.name} 🏠`);
+
+    const existingUsers = Object.entries(rooms[room]).map(([id, avatar]) => ({ id, avatar }));
+    socket.emit("user-list", existingUsers);
+    socket.to(room).emit("user-joined", { id: socket.id, avatar: avatarData });
+  });
+
+  socket.on("disconnect", () => {
+    log(`User disconnected: ${socket.id} ❌`);
+
+    Object.keys(rooms).forEach((room) => {
+      if (rooms[room][socket.id]) {
+        delete rooms[room][socket.id];
+        log(`Removed ${socket.id} from room "${room}" 🚪`);
+        roomsNamespace.to(room).emit("user-left", socket.id);
+      }
+    });
+  });
+});
+
+const PORT = process.env.PORT || 4000;
+server.listen(PORT, () => {
+  log(`WebRTC signaling server running on port ${PORT} 🚀`);
 });

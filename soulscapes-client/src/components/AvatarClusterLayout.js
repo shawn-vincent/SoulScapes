@@ -88,23 +88,26 @@ const AvatarClusterLayout = ({ children, initialSize = 80, margin = 20 }) => {
   const strengthCollide = .5;
   const strengthAlpha = 0.3;
 
-  const simulationRef = useRef(null);
-  if (!simulationRef.current) {
-    simulationRef.current = forceSimulation(
-      childArray.map((child) => ({
-        id: child.id,
-        x: 0,
-        y: 0,
-        zoomed: false,
-      }))
-    )
-      .force('collide', forceCollide(avatarSize / 2 + 5).strength(strengthCollide))
-      .force('x', forceX(0).strength(strengthX))
-      .force('y', forceY(0).strength(strengthY))
-      .alpha(strengthAlpha);
+    const makeChildNodes = (childArray)=> {
+      return childArray.map((child) => ({
+          id: child.id,
+          x: Math.random(0,400),
+          y: Math.random(0,400),
+          zoomed: false,
+      }));
   }
+    
+    
+  const simulationRef = useRef(null);
+    if (!simulationRef.current) {
+	simulationRef.current = forceSimulation(makeChildNodes(childArray))
+	    .force('collide', forceCollide(avatarSize / 2 + 5).strength(strengthCollide))
+	    .force('x', forceX(0).strength(strengthX))
+	    .force('y', forceY(0).strength(strengthY))
+	    .alpha(strengthAlpha);
+    }
 
-  useEffect(() => {
+    useEffect(() => {
     const { width, height } = containerSize;
     if (width === 0 || height === 0 || childArray.length === 0) return;
 
@@ -114,13 +117,17 @@ const AvatarClusterLayout = ({ children, initialSize = 80, margin = 20 }) => {
     const newNodes = childArray.map((child) => {
       const existingNode = currentNodes.find((n) => n.id === child.id);
       if (existingNode) {
-        return { ...existingNode, id: child.id };
+	  //console.log("reusing existing node ", {existingNode})
+          return { ...existingNode, id: child.id };
       } else {
-        return {
-          id: child.id,
-          x: Math.floor(Math.random() * width),
-          y: Math.floor(Math.random() * height),
-          zoomed: false,
+	  const x = Math.floor(Math.random() * width);
+	  const y = Math.floor(Math.random() * height);
+	  //console.log("creating new node at ", {x,y})
+	  return {
+	      id: child.id,
+	      x: x,
+	      y: y,
+	      zoomed: false,
         };
       }
     });
