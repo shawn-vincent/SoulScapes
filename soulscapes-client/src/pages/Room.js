@@ -39,12 +39,13 @@ const Room = () => {
             const letter = String.fromCharCode(65 + (i % 26));
             const extra = i >= 26 ? i - 26 + 1 : '';
             return (
-              <Avatar
-                key={`cluster-${i}`}
-                initials={letter + extra}
-                borderColor="#00f"
-                size={80}
-              />
+		<Avatar data={{
+			    key: `cluster-${i}`,
+			    initials: letter + extra,
+			    borderColor: "#00f",
+			    size: 80
+			}}
+		/>
             );
           })}
         </AvatarClusterLayout>
@@ -53,7 +54,13 @@ const Room = () => {
       {/* Bottom (20%) - Horizontal Grid */}
       <div className={styles.avatarGridContainer}>
           <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
-	      <Avatar local={true} key="self" initials="You" borderColor="#f00"/>
+		<Avatar data={{
+			    key:"self",
+			    initials: "You",
+			    borderColor: "#f00",
+			    size: 80,
+			    local: true
+			}}/>
           </AvatarHorizontalGridLayout>
       </div>
     </DividedLayout>
