@@ -78,7 +78,7 @@ const AvatarClusterLayout = ({ children, initialSize = 80, margin = 20 }) => {
 	const computedHeight = maxY - minY + 2 * margin;
 	const contentWidth = computedWidth; 
 	const contentHeight = computedHeight;
-	//console.log("Computed size", computedWidth, computedHeight);
+	//slog("Computed size", computedWidth, computedHeight);
 	const offsetX = containerSize.width / 2 - (minX + maxX) / 2;
 	const offsetY = containerSize.height / 2 - (minY + maxY) / 2;
 	setContentSize({ width: contentWidth, height: contentHeight, offsetX, offsetY });
@@ -158,12 +158,12 @@ const AvatarClusterLayout = ({ children, initialSize = 80, margin = 20 }) => {
     // 	const newNodes = childArray.map((child) => {
     // 	    const existingNode = currentNodes.find((n) => n.id === child.id);
     // 	    if (existingNode) {
-    // 		//console.log("reusing existing node ", {existingNode})
+    // 		//slog("reusing existing node ", {existingNode})
     // 		return { ...existingNode, id: child.id };
     // 	    } else {
     // 		const x = Math.floor(Math.random() * width);
     // 		const y = Math.floor(Math.random() * height);
-    // 		//console.log("creating new node at ", {x,y})
+    // 		//slog("creating new node at ", {x,y})
     // 		return {
     // 		    id: child.id,
     // 		    x: x,

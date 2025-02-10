@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import * as slogging from '../../shared/slogging.js';
 
 class LocalAvatarManager extends EventEmitter {
     constructor() {
@@ -24,7 +25,7 @@ class LocalAvatarManager extends EventEmitter {
 	this.saveToStorage();
 	
 
-	console.log(`[${new Date().toISOString()}] 🎭 Loaded local avatar`, this.avatar);
+	slog(`🎭 Loaded local avatar`, this.avatar);
     }
 
     
@@ -46,9 +47,9 @@ class LocalAvatarManager extends EventEmitter {
 	    this.avatar.videoStream = stream;
 	    this.avatar.videoEnabled = true;
 	    this.emit("videoStreamUpdated", stream);
-	    console.log(`[${new Date().toISOString()}] 📹 Video stream started`);
+	    slog(`📹 Video stream started`);
 	} catch (error) {
-	    console.error(`[${new Date().toISOString()}] ❌ Failed to get webcam`, error);
+	    serror(`❌ Failed to get webcam`, error);
 	    this.emit("videoStreamUpdated");
 	}
     }
@@ -56,7 +57,7 @@ class LocalAvatarManager extends EventEmitter {
     setConnectionStatus(status) {
 	this.avatar.connectionStatus = status;
 	this.emit("statusChanged", status); // Notify listeners (React components)
-	console.log(`[${new Date().toISOString()}] 🔄 Connection Status: ${status}`);
+	slog(`🔄 Connection Status: ${status}`);
     }
 
     setAvatarData({ name, mood, color, image }) {

@@ -22,8 +22,8 @@ class RemoteAvatarManager extends EventEmitter {
 		isVideoLoading: false,
 		connectionStatus: "Connected"  // Update connection status here
 	    };
-	    console.log(
-		`[${new Date().toISOString()}] ✅ Video stream set for ${id}`, 
+	    slog(
+		`✅ Video stream set for ${id}`, 
 		stream
 	    );
 	    this.emit("updated");
@@ -43,7 +43,7 @@ class RemoteAvatarManager extends EventEmitter {
 
     switchRoom(room) {
 	// Reset avatars when switching rooms
-	console.log(`[${new Date().toISOString()}] 🔄 Resetting avatars for new room`);
+	slog(`🔄 Resetting avatars for new room`);
 	this.avatars = {};
 	this.emit("updated");
     }

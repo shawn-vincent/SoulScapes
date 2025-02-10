@@ -12,7 +12,7 @@
  * @returns {number} newSize - The new avatar size.
  */
 export function applyZoomIn(setSize, currentSize, activeScrollButtons, percentage = 10) {
-  console.log('applyZoomIn called. Active scroll buttons:', activeScrollButtons);
+  slog('applyZoomIn called. Active scroll buttons:', activeScrollButtons);
   const newSize = currentSize * (1 + percentage / 100);
   setSize(newSize);
   return newSize;

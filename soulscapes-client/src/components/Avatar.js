@@ -12,13 +12,13 @@ const Avatar = ({ data , onUpdate }) => {
     useEffect(() => {
 	if (data.videoStream && videoRef.current) {
 	    if (data.videoStream instanceof MediaStream) { // ✅ Ensure it's a valid MediaStream
-		console.log(`[${new Date().toISOString()}] ✅ Video stream set on  <Avatar>`,
+		slog(`✅ Video stream set on  <Avatar>`,
 			    data.videoStream);
 
 		videoRef.current.srcObject = data.videoStream;
 		setIsVideoLoading(false);
 	    } else {
-		console.error(`[${new Date().toISOString()}] ❌ Invalid videoStream detected:`, data.videoStream);
+		serror(`❌ Invalid videoStream detected:`, data.videoStream);
 		videoRef.current.srcObject = null; // Explicitly reset in case of invalid data
 		setIsVideoLoading(true);
 	    }

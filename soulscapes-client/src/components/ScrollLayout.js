@@ -44,7 +44,7 @@ const ScrollLayout = ({ children, top = true, bottom = true, left = true, right 
 	  
 	  // Debugging: log the measurements
 	  if (DebugScrolling)
-	      console.log('Measurements:', { canUp, canDown, canLeft, canRight,
+	      slog('Measurements:', { canUp, canDown, canLeft, canRight,
 					     scrollTop, scrollLeft, scrollHeight, scrollWidth,
 					     clientHeight, clientWidth });
 	  setCanScroll({
@@ -129,7 +129,7 @@ const ScrollLayout = ({ children, top = true, bottom = true, left = true, right 
     // Compute the new scale so that the entire content fits:
     const newScale = Math.min(containerWidth / contentWidth, containerHeight / contentHeight)-0.01;
 
-      console.log('Zoom fit:', { containerWidth, containerHeight,
+      slog('Zoom fit:', { containerWidth, containerHeight,
 				 contentWidth, contentHeight,
 				 newScale });
 
