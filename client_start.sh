@@ -22,4 +22,5 @@ if [ ! -f package.json ]; then
 fi
 
 echo "🚀 Starting the SoulScapes client in $(pwd)..."
+export DANGEROUSLY_DISABLE_HOST_CHECK=true
 npm start
