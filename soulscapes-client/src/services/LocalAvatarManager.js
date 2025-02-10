@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import * as slogging from '../../shared/slogging.js';
+import * as slogging from '../../shared/slogging.js'; 
 
 class LocalAvatarManager extends EventEmitter {
     constructor() {
