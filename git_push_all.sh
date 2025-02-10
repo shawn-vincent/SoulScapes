@@ -13,20 +13,20 @@ commit_message="Auto commit on $(date)"
 while getopts "m:" opt; do
   case "$opt" in
     m) commit_message="$OPTARG" ;;
-    *) echo "Usage: $0 [-m \"commit message\"]" >&2; exit 1 ;;
+    *) ./slog "Usage: $0 [-m \"commit message\"]" >&2; exit 1 ;;
   esac
 done
 
 # Add all changes.
-echo "➕ Adding all changes..."
+./slog "➕ Adding all changes..."
 git add .
 
 # Commit with the provided or default commit message.
-echo "📝 Committing changes with message: \"$commit_message\""
+./slog "📝 Committing changes with message: \"$commit_message\""
 git commit -m "$commit_message"
 
 # Push to the remote repository.
-echo "🚀 Pushing changes..."
+./slog "🚀 Pushing changes..."
 git push
 
-echo "✅ Done!"
+./slog "✅ Done!"

@@ -11,7 +11,7 @@
 # and prints a summary (number of files, character count, and list of files).
 
 if [ "$#" -eq 0 ]; then
-    echo "Usage: $0 \"<pattern1>\" \"<pattern2>\" ..."
+    ./slog "Usage: $0 \"<pattern1>\" \"<pattern2>\" ..."
     exit 1
 fi
 
@@ -32,7 +32,7 @@ find_cmd+=" \\) "
 files=$(eval "$find_cmd")
 
 if [ -z "$files" ]; then
-    echo "No files matched the given patterns."
+    ./slog "No files matched the given patterns."
     exit 0
 fi
 
@@ -49,7 +49,7 @@ done <<< "$files"
 
 # Check if any files remain after filtering.
 if [ -z "$filtered_files" ]; then
-    echo "No files remain after filtering out those ignored by .gitignore."
+    ./slog "No files remain after filtering out those ignored by .gitignore."
     exit 0
 fi
 
@@ -76,6 +76,6 @@ echo "$output" | pbcopy
 char_count=$(echo -n "$output" | wc -c)
 
 # Print the summary.
-echo "Copied $file_count files ($char_count characters) to the clipboard."
-echo "Files matched (after filtering .gitignore):"
-echo "$file_list"
+./slog "Copied $file_count files ($char_count characters) to the clipboard."
+./slog "Files matched (after filtering .gitignore):"
+./slog "$file_list"

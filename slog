@@ -1,0 +1,95 @@
+#!/usr/bin/env node
+/**
+ * slog - Command Line Interface for slogging (slogger)
+ *
+ * Usage:
+ *   slog {debug|log|warn|error|<optional>} msg arg...
+ *
+ * Examples:
+ *   slog debug "User ${user} logged in" '{"user": "alice"}'
+ *   slog "A simple log message"
+ *
+ * This script uses the slogging module and supports a configuration file (.slogger)
+ * in either:
+ *   1. The current working directory (for project-specific configuration), or
+ *   2. The directory where the slog file resides (as a default configuration).
+ *
+ * The configuration file is assumed to be in JSON format.
+ *
+ * Additionally, when run via this CLI tool, the "slogger" component's logging level
+ * (for both file/socket and console) is overridden to "warn".
+ */
+
+import pkg from './shared/slogging.js'; // Adjust the relative path as needed.
+const { sdebug, slog, swarn, serror, slogConfig } = pkg;
+
+import { existsSync, readFileSync } from 'fs';
+import path from 'path';
+
+// Helper to determine the directory of the current module (ES module compatible)
+const __dirname = path.dirname(new URL(import.meta.url).pathname);
+
+// --- Load configuration from .slogger ---
+// First, try loading the .slogger config from the current working directory.
+let configPath = path.resolve(process.cwd(), '.slogger');
+
+// If not found there, fall back to the directory where the "slog" file resides.
+if (!existsSync(configPath)) {
+  configPath = path.resolve(__dirname, '.slogger');
+}
+
+if (existsSync(configPath)) {
+  try {
+    const configText = readFileSync(configPath, { encoding: 'utf8' });
+    const configObj = JSON.parse(configText);
+    slogConfig(configObj);
+  } catch (err) {
+    console.error("Error loading .slogger config file:", err.message);
+    // Optionally, exit if configuration is critical:
+    // process.exit(1);
+  }
+}
+
+// --- Override the "slogger" component logging to "warn" ---
+slogConfig({
+  "logLevel.slogger": "warn",
+  "console.slogger": "warn"
+});
+
+// --- Process command-line arguments ---
+const args = process.argv.slice(2);
+
+if (args.length === 0) {
+  console.error('Usage: slog {debug|log|warn|error|<optional>} message [args...]');
+  process.exit(1);
+}
+
+// Determine if the first argument is a recognized log level.
+const possibleLevel = args[0].toLowerCase();
+let level, messageArgs;
+if (['debug', 'log', 'warn', 'error'].includes(possibleLevel)) {
+  level = possibleLevel;
+  messageArgs = args.slice(1);
+} else {
+  // Default to "log" if no recognized level is provided.
+  level = 'log';
+  messageArgs = args;
+}
+
+const message = messageArgs.join(' ');
+
+// Dispatch the log message to the appropriate slogging function.
+switch (level) {
+  case 'debug':
+    sdebug(message);
+    break;
+  case 'warn':
+    swarn(message);
+    break;
+  case 'error':
+    serror(message);
+    break;
+  default:
+    slog(message);
+    break;
+}
