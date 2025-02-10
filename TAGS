@@ -1,0 +1,253 @@
+
+client_start.sh,164
+CLIENT_DIR=7,214
+cd "$CLIENT_DIR" || { ./slog error "‚ùå Failed to change directory to '$CLIENT_DIR'."; exit 16,494
+export DANGEROUSLY_DISABLE_HOST_CHECK=25,861
+
+copy_sources.sh,107
+find_cmd=19,600
+        first=23,695
+filtered_files=40,1008
+file_count=57,1442
+    file_count=65,1592
+
+git_push_all.sh,121
+commit_message=10,295
+    m) commit_message=15,410
+    *) ./slog "Usage: $0 [-m \"commit message\"]" >&2; exit 16,445
+
+server_start.sh,118
+SERVER_DIR=7,214
+cd "$SERVER_DIR" || { ./slog error "‚ùå Failed to change directory to '$SERVER_DIR'."; exit 16,494
+
+shared/slogging.js,985
+    function formatTimestamp(217,9403
+    function getTimezoneAbbr(238,10289
+    function stringify(247,10577
+    function startsWithEmoji(259,10892
+    function getDefaultEmoji(264,11053
+    function performSubstitution(278,11515
+    function processLogArgs(287,11914
+    function processComponentLogArgs(308,12643
+    function initFileLogging(333,13566
+    function rotateLogFileSizeBased(350,14242
+    function getTimestampForFilename(401,16758
+    function writeLogToFileSync(414,17300
+    function flushSocketBuffer(439,18548
+    function sendLogToSocket(494,20865
+    function ensureInitialized(561,23919
+    function logMessage(573,24562
+    function sdebug(641,27524
+    function slog(650,27861
+    function swarn(655,28029
+    function serror(664,28362
+    function csdebug(675,28767
+    function cslog(684,29143
+    function cswarn(689,29350
+    function cerror(698,29722
+    function slogConfig(711,30330
+    function slogExpressEndpoint(789,33852
+
+slog,202
+const 24,816
+const __dirname 30,1029
+let configPath 34,1219
+const args 60,1981
+const possibleLevel 68,2211
+let level,69,2256
+let level, messageArgs;69,2256
+} else 73,2401
+const message 79,2510
+
+soulscapes-client/package-lock.json,335
+  "requires": true,5,79
+      "optional": true,3059,122184
+      "hasInstallScript": true,5810,230238
+      "hasInstallScript": true,5834,231165
+      "optional": true,7126,278847
+      "hasInstallScript": true,8400,324995
+      "optional": true,8402,325051
+      "optional": true,15254,576429
+      "peer": true,16341,616622
+
+soulscapes-client/package.json,26
+    "private": true,4,59
+
+soulscapes-client/public/index.html,18
+Soulscapes14,470
+
+soulscapes-client/public/logo512.png,470
+£ÛTîÒt›äaDÔ… ƒi’vi’5,1046
+‡óÓ+¯ßÎÇö⁄Õ“É∑ÅG~\Î“Ã]0Õ4·ìÂBU`È?cÉc13,2524
+862ÚÅáâﬂ:©aâQ¯8k!„À¡&ïß∫B}‡MVk¬z>óq;q18,4000
+îD]UkIÌˆçäïìw=˜ﬁB˚C≤‹LìùX¯ûk3SgÜötÌàsáªÖK‹Œ73æ∏@E‹Uµg(PY<"¿kØÑ8à#ìúz&h”sﬁ’p»Ädu}Ë›‚i i28,5569
+üÍqÒÆ¡^ ©‡Ôáê¡`( Ùı˚_ã•.hJs£Öo5ß;pB˙n¶´‹\…}ÃÕÙ(}0\Ö∞R˛~n|‰Rj‚5AUÛcÈój‚5AUÛcÈ29,5726
+ç£/_`î˛ùz∫_⁄®ÃÈ¡ûjDu„Û∏ò‰ç*Ô7Ôl&ì•‰›7ø}Ó°∫Cv›8jp ˛‘®0ﬁˆàPÁ‹“Ò}‚‡xqPxqP32,6469
+ºÌÀ√r˝r33,6746
+z‹z‹35,7535
+
+soulscapes-client/public/test/pinchToZoom.html,57
+Pinch Zoom Box6,142
+const view = (() => {zoomMe28,600
+
+soulscapes-client/src/components/Avatar.js,70
+import React,1,0
+const Avatar 5,226
+export default Avatar;103,2596
+
+soulscapes-client/src/components/AvatarClusterLayout.js,148
+import React,2,26
+const AvatarClusterLayout 13,321
+AvatarClusterLayout.propTypes propTypes243,7708
+export default AvatarClusterLayout;249,7841
+
+soulscapes-client/src/components/AvatarClusterLayout.js.bak,36
+    function getRandomInt(143,4885
+
+soulscapes-client/src/components/AvatarConfigWindow.js,114
+import React,1,0
+const AvatarConfigWindow 5,156
+const styles 38,909
+export default AvatarConfigWindow;96,2036
+
+soulscapes-client/src/components/AvatarHorizontalGridLayout.js,166
+import React,2,48
+const AvatarHorizontalGridLayout 8,291
+AvatarHorizontalGridLayout.propTypes propTypes87,2569
+export default AvatarHorizontalGridLayout;93,2700
+
+soulscapes-client/src/components/AvatarLayout.js,204
+import React,2,34
+const AvatarLayout 5,131
+const AvatarLayout = React.forwardRef(({ children, className, style }, ref)5,131
+AvatarLayout.propTypes propTypes15,352
+export default AvatarLayout;21,469
+
+soulscapes-client/src/components/AvatarSpace.js,80
+import React,2,33
+const AvatarSpace 6,184
+export default AvatarSpace;63,2288
+
+soulscapes-client/src/components/DividedLayout.js,129
+import React,2,35
+const DividedLayout 7,252
+DividedLayout.propTypes propTypes149,4718
+export default DividedLayout;157,4969
+
+soulscapes-client/src/components/DividedLayout.module.css,29
+.firstPane,firstPane18,345
+
+soulscapes-client/src/components/MessageList.js,59
+const MessageList 4,75
+export default MessageList;13,277
+
+soulscapes-client/src/components/ScrollLayout.js,175
+import React,1,0
+const isTrue 7,324
+const DebugScrolling 10,395
+const ScrollLayout 12,426
+ScrollLayout.propTypes propTypes220,6718
+export default ScrollLayout;228,7050
+
+soulscapes-client/src/components/SegmentedControl.js,69
+const SegmentedControl 4,80
+export default SegmentedControl;23,602
+
+soulscapes-client/src/components/SideSplitLayout.js,134
+import React,1,0
+const SideSplitLayout 5,154
+SideSplitLayout.propTypes propTypes165,4932
+export default SideSplitLayout;174,5191
+
+soulscapes-client/src/components/ZoomControl.js,100
+const ZoomControl 7,244
+ZoomControl.propTypes propTypes23,785
+export default ZoomControl;29,934
+
+soulscapes-client/src/index.js,18
+const root 6,124
+
+soulscapes-client/src/pages/Room.js,68
+import React,2,21
+const Room 16,737
+export default Room;160,5290
+
+soulscapes-client/src/services/LocalAvatarManager.js,129
+class LocalAvatarManager extends EventEmitter 3,40
+const localAvatarManager 84,2315
+export default localAvatarManager;85,2368
+
+soulscapes-client/src/services/RemoteAvatarManager.js,132
+class RemoteAvatarManager extends EventEmitter 4,66
+const remoteAvatarManager 52,1156
+export default remoteAvatarManager;53,1211
+
+soulscapes-client/src/services/RoomManager.js,474
+class RoomManager 5,152
+    constructor(6,172
+    async joinRoom(42,1293
+    rejoinRoom(63,1981
+    async handleUserList(75,2342
+    async handleNewUser(82,2508
+    async handleUserLeft(93,2831
+    async startCall(98,2907
+    async handleOffer(152,5176
+    async handleOffer_old(199,7364
+    handleIceCandidate(251,9757
+    async handleAnswer(262,10339
+const roomManager 280,11011
+window.roomManager roomManager281,11050
+export default roomManager;282,11084
+
+soulscapes-client/src/utils/zoomUtils.js,36
+export function applyZoomIn(14,620
+
+soulscapes-server/package-lock.json,25
+  "requires": true,5,79
+
+soulscapes-server/server.js,122
+const app 7,145
+const server 8,168
+const io 9,207
+const rooms 16,308
+const roomsNamespace 19,361
+const PORT 87,2432
+
+tunnel_https.sh,12
+port=7,112
+
+soulscapes-server/public/example.png,0
+
+soulscapes-server/package.json,0
+
+soulscapes-client/src/services/*log2*,0
+
+soulscapes-client/src/pages/Room.module.css,0
+
+soulscapes-client/src/index.css,0
+
+soulscapes-client/src/components/ZoomControl.module.css,0
+
+soulscapes-client/src/components/SegmentedControl.module.css,0
+
+soulscapes-client/src/components/ScrollLayout.module.css,0
+
+soulscapes-client/src/components/MessageList.module.css,0
+
+soulscapes-client/src/components/AvatarSpace.module.css,0
+
+soulscapes-client/src/components/AvatarHorizontalGridLayout.module.css,0
+
+soulscapes-client/src/components/AvatarClusterLayout.module.css,0
+
+soulscapes-client/src/components/Avatar.module.css,0
+
+soulscapes-client/public/robots.txt,0
+
+soulscapes-client/public/manifest.json,0
+
+soulscapes-client/public/logo192.png,0
+
+soulscapes-client/public/favicon.ico,0
+
+.gitignore,0
