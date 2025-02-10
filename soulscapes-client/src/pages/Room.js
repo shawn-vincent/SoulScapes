@@ -1,5 +1,5 @@
  // src/pages/Room.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { List } from '@phosphor-icons/react';
 import DividedLayout from '../components/DividedLayout';
 import MessageList from '../components/MessageList';
@@ -17,15 +17,57 @@ import remoteAvatarManager from "../services/RemoteAvatarManager";
 const Room = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [connectionStatus, setConnectionStatus] = useState(localAvatarManager.getAvatarData().connectionStatus);
 
-  useEffect(() => {
-
-    roomManager.joinRoom("lobby"); // XXX test name
-	
+  useEffect(() => {	
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const hasJoined = useRef(false); // Prevent duplicate joins
+  useEffect(() => {
+
+      if (!hasJoined.current) {
+	  roomManager.joinRoom("lobby");
+	  hasJoined.current = true;
+      }
+      
+      // Listen for connection status updates
+      const updateStatus = (status) => setConnectionStatus(status);
+      localAvatarManager.on("statusChanged", updateStatus);
+      
+      return () => {
+	  localAvatarManager.off("statusChanged", updateStatus);
+      };
+  }, []);
+
+
+  const [avatars, setAvatars] =
+	  useState(remoteAvatarManager.getAvatarsForCurrentRoom());
+  const [localAvatar, setLocalAvatar] = useState(localAvatarManager.getAvatarData());
+
+  useEffect(() => {
+    const updateAvatars = () => {
+      setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
+    };
+
+    const updateLocalAvatar = () => {
+      setLocalAvatar({ ...localAvatarManager.getAvatarData() });
+    };
+
+      remoteAvatarManager.on("updated", updateAvatars);
+      localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
+
+    return () => {
+	remoteAvatarManager.off("updated", updateAvatars);
+	localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
+
+    };
+  }, []);
+
+ 
+
 
   const toggleMenu = () => setMenuOpen((prev) => !prev);
 
@@ -50,22 +92,11 @@ const Room = () => {
 		}
 		
 		{(true && 
-		<AvatarClusterLayout avatarSize={80}>
-		    {Array.from({ length: 10 }, (_, i) => {
-			const letter = String.fromCharCode(65 + (i % 26));
-			const extra = i >= 26 ? i - 26 + 1 : '';
-			return (
-			    <Avatar
-				key={`cluster-${i}`}
-				data={{
-					initials: letter + extra,
-					color: "#00f",
-					size: 80
-				    }}
-			    />
-			);
-		    })}
-		</AvatarClusterLayout>
+		  <AvatarClusterLayout avatarSize={80}>
+		      {avatars.map(
+			  (avatar) => (<Avatar key={avatar.id} data={avatar}/>)
+		      )}
+		  </AvatarClusterLayout>
 		 )}
 		
 	    </ScrollLayout>
@@ -75,13 +106,9 @@ const Room = () => {
 	<div className={styles.avatarGridContainer}>
 	  <ScrollLayout top={false} bottom={false}>
               <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
-		  <Avatar data={{
-			      key:"self",
-			      initials: "You",
-			      color: "#f00",
-			      size: 80,
-			      local: true
-			  }}/>
+		  <Avatar data={{ ...localAvatarManager.getAvatarData(),
+				  connectionStatus }} />
+		 
 		  <Avatar key="1" data={{initials: "1", color: "#00f", size: 80}} />
 		  <Avatar key="2" data={{initials: "2", color: "#00f", size: 80}} />
 		  <Avatar key="3" data={{initials: "3", color: "#00f", size: 80}} />

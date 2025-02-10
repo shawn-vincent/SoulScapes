@@ -29,6 +29,31 @@ roomsNamespace.on("connection", (socket) => {
     socket.to(room).emit("user-joined", { id: socket.id, avatar: avatarData });
   });
 
+  // --- New event handlers for WebRTC signaling ---
+
+  socket.on("offer", (data) => {
+    // Forward the offer to the target client.
+    // Assume data has: { target, offer }
+    log(`Forwarding offer from ${socket.id} to ${data.target}`);
+    socket.to(data.target).emit("offer", { offer: data.offer, sender: socket.id });
+  });
+
+  socket.on("answer", (data) => {
+    // Forward the answer to the target client.
+    // Assume data has: { target, answer }
+    log(`Forwarding answer from ${socket.id} to ${data.target}`);
+    socket.to(data.target).emit("answer", { answer: data.answer, sender: socket.id });
+  });
+
+  socket.on("ice-candidate", (data) => {
+    // Forward the ICE candidate to the target client.
+    // Assume data has: { target, candidate }
+    log(`Forwarding ICE candidate from ${socket.id} to ${data.target}`);
+    socket.to(data.target).emit("ice-candidate", { candidate: data.candidate, sender: socket.id });
+  });
+
+  // ---------------------------------------------------
+
   socket.on("disconnect", () => {
     log(`User disconnected: ${socket.id} ❌`);
 

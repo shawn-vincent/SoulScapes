@@ -1,0 +1,78 @@
+LocalAvatarManager.js:25 [2025-02-09T22:59:35.487Z] 🎭 Loaded local avatar Object
+RemoteAvatarManager.js:10 [2025-02-09T22:59:35.487Z] 📡 Remote avatar manager initialized
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:14 [2025-02-09T22:59:35.505Z] 🔄 Resetting avatars for new room
+LocalAvatarManager.js:57 [2025-02-09T22:59:35.505Z] 🔄 Connection Status: Connecting...
+RoomManager.js:57 [2025-02-09T22:59:35.505Z] 🚪 Joining room "lobby"
+RoomManager.js:17 [2025-02-09T22:59:35.512Z] ✅ Connected to server
+LocalAvatarManager.js:57 [2025-02-09T22:59:35.512Z] 🔄 Connection Status: Connected
+RoomManager.js:7 [2025-02-09T22:59:35.512Z] ⚠️ Skipping rejoin, already in room "lobby".
+overrideMethod @ hook.js:608
+Promise.then
+(anonymous) @ globals.js:4
+ondecoded @ manager.js:208
+(anonymous) @ index.js:136
+add @ index.js:146
+ondata @ manager.js:195
+(anonymous) @ index.js:136
+_onPacket @ socket.js:259
+(anonymous) @ index.js:136
+onPacket @ transport.js:99
+callback @ polling.js:79
+onData @ polling.js:82
+(anonymous) @ index.js:136
+_onLoad @ polling-xhr.js:193
+(anonymous) @ polling-xhr.js:129
+XMLHttpRequest.send
+_create @ polling-xhr.js:139
+Request @ polling-xhr.js:75
+request @ polling-xhr.js:253
+doPoll @ polling-xhr.js:52
+_poll @ polling.js:59
+onData @ polling.js:89
+(anonymous) @ index.js:136
+_onLoad @ polling-xhr.js:193
+(anonymous) @ polling-xhr.js:129
+XMLHttpRequest.send
+_create @ polling-xhr.js:139
+Request @ polling-xhr.js:75
+request @ polling-xhr.js:253
+doPoll @ polling-xhr.js:52
+_poll @ polling.js:59
+doOpen @ polling.js:19
+open @ transport.js:47
+_open @ socket.js:197
+SocketWithoutUpgrade @ socket.js:150
+SocketWithUpgrade @ socket.js:565
+Socket @ socket.js:725
+open @ manager.js:111
+Manager @ manager.js:38
+lookup @ index.js:29
+RoomManager @ RoomManager.js:7
+./src/services/RoomManager.js @ RoomManager.js:276
+(anonymous) @ react refresh:6
+__webpack_require__ @ bootstrap:22
+fn @ hot module replacement:61
+./src/pages/Room.js @ index.js:9
+(anonymous) @ react refresh:6
+__webpack_require__ @ bootstrap:22
+fn @ hot module replacement:61
+./src/index.js @ ZoomControl.js:29
+(anonymous) @ react refresh:6
+__webpack_require__ @ bootstrap:22
+(anonymous) @ startup:7
+(anonymous) @ startup:7Understand this warningAI
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+hook.js:377 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:31 [2025-02-09T22:59:35.591Z] ➕ User U4ZrGJCd6_ouIcfUAAAb joined Object
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:31 [2025-02-09T22:59:35.591Z] ➕ User jOnPypufckfrOkstAAAd joined Object
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+hook.js:377 getAvatarsForCurrentRoom Object
+LocalAvatarManager.js:47 [2025-02-09T22:59:35.606Z] 📹 Video stream started
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+hook.js:377 getAvatarsForCurrentRoom Object
+RemoteAvatarManager.js:53 getAvatarsForCurrentRoom Object
+hook.js:377 getAvatarsForCurrentRoom Object
