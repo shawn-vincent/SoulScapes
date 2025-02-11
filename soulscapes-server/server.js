@@ -2,9 +2,9 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 // Import the logging library as a default export.
-import slogging from "../shared/slogging.js";
+import slogger from "../shared/slogger.js";
 
-const { slog, serror, slogExpressEndpoint, slogConfig } = slogging;
+const { slog, serror, slogExpressEndpoint, slogConfig } = slogger;
 
 /**
  * Wraps an error with additional context while preserving the original error.
@@ -69,9 +69,14 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+
+
 // Use JSON middleware on the /logs endpoint before handing it off to slogger.
 app.use("/logs", express.json());
-slogExpressEndpoint(app, "/logs");
+slogExpressEndpoint(app, "/logs", function(req) {
+    // Default: return the client’s IP address (if available).
+    return req && req.ip ? req.ip : "unknown";
+});
 
 // -------------------------
 // Global Express Error Middleware
@@ -116,13 +121,21 @@ const rooms = {}; // Tracks users and their avatars
 const roomsNamespace = io.of("/rooms");
 
 slogConfig({
-    logLevel: "debug",
-    console: "debug",
-    logFile: {
-	enabled: true,
-	path: "../logs/server-soulscapes.log",
-    },
+    slog: ["debug", // slog to console
+	   { // slog to file
+	       type:"file",
+	       level:"debug",
+	       path: "../logs/server-soulscapes.log",
+	   }],
+    "slog._remote": ["debug", // slog to console
+		     { // slog to file
+			 type:"file",
+			 level:"debug",
+			 path: "../logs/clientRemote-soulscapes.log",
+		     }],
 });
+
+slog("Set up slog config");
 
 roomsNamespace.on("connection", safeSocketHandler("connection", (socket) => {
     // Extend the socket with a safeOn() method.

@@ -16,7 +16,18 @@ if [ "$#" -eq 0 ]; then
     exit 1
 fi
 
-# Retrieve all tracked files via git ls-files.
+# --- Preprocess the user-supplied patterns ---
+# For each pattern, if it does not contain a "*", then we assume the user meant to match
+# the given filename anywhere in the path, so we prepend "*/".
+processed_patterns=()
+for pattern in "$@"; do
+    if [[ "$pattern" != *"*"* ]]; then
+        pattern="*/$pattern"
+    fi
+    processed_patterns+=("$pattern")
+done
+
+# --- Retrieve all tracked files via git ls-files ---
 all_files=$(git ls-files)
 
 if [ -z "$all_files" ]; then
@@ -24,11 +35,18 @@ if [ -z "$all_files" ]; then
     exit 0
 fi
 
-# Filter the files based on the provided patterns.
-# The provided patterns are shell globs (e.g. "*.js"), so we use bash's pattern matching.
+# --- Filter the files based on the processed patterns ---
+# We also ensure that each file path starts with "/" or "./".
 filtered_files=""
 while IFS= read -r file; do
-    for pattern in "$@"; do
+    # Normalize file paths: if the file doesn't start with "/" or "./", prepend "./"
+    if [[ "$file" != /* && "$file" != ./* ]]; then
+         file="./$file"
+    fi
+
+    # Check each pattern. Note that when using bash’s pattern matching inside [[ ]],
+    # we want the pattern unquoted.
+    for pattern in "${processed_patterns[@]}"; do
         if [[ "$file" == $pattern ]]; then
             filtered_files+="$file"$'\n'
             break  # Stop checking further patterns if one matches.
@@ -41,12 +59,11 @@ if [ -z "$filtered_files" ]; then
     exit 0
 fi
 
-# Initialize variables for output.
+# --- Process each filtered file ---
 file_count=0
 output=""
 file_list=""
 
-# Process each filtered file.
 while IFS= read -r file; do
     # Skip empty lines.
     [ -z "$file" ] && continue

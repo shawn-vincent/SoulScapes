@@ -1,4 +1,4 @@
-import { slog, serror, sdebug, swarn } from '../../../shared/slogging.js';
+import { slog, serror, sdebug, swarn } from '../../../shared/slogger.js';
 import { io } from "socket.io-client";
 import { safeOn, safeEmit, wrapError } from "../utils/safeSocket.js";
 import localAvatarManager from "./LocalAvatarManager";

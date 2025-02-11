@@ -4,12 +4,10 @@ CLIENT_DIR=7,214
 cd "$CLIENT_DIR" || { ./slog error "❌ Failed to change directory to '$CLIENT_DIR'."; exit 16,494
 export DANGEROUSLY_DISABLE_HOST_CHECK=25,861
 
-copy_sources.sh,107
-find_cmd=19,600
-        first=23,695
-filtered_files=40,1008
-file_count=57,1442
-    file_count=65,1592
+copy_sources.sh,75
+processed_patterns=22,854
+        pattern=25,939
+filtered_files=40,1320
 
 git_push_all.sh,121
 commit_message=10,295
@@ -20,55 +18,86 @@ server_start.sh,118
 SERVER_DIR=7,214
 cd "$SERVER_DIR" || { ./slog error "❌ Failed to change directory to '$SERVER_DIR'."; exit 16,494
 
-shared/slogging.js,985
-    function formatTimestamp(217,9403
-    function getTimezoneAbbr(238,10289
-    function stringify(247,10577
-    function startsWithEmoji(259,10892
-    function getDefaultEmoji(264,11053
-    function performSubstitution(278,11515
-    function processLogArgs(287,11914
-    function processComponentLogArgs(308,12643
-    function initFileLogging(333,13566
-    function rotateLogFileSizeBased(350,14242
-    function getTimestampForFilename(401,16758
-    function writeLogToFileSync(414,17300
-    function flushSocketBuffer(439,18548
-    function sendLogToSocket(494,20865
-    function ensureInitialized(561,23919
-    function logMessage(573,24562
-    function sdebug(641,27524
-    function slog(650,27861
-    function swarn(655,28029
-    function serror(664,28362
-    function csdebug(675,28767
-    function cslog(684,29143
-    function cswarn(689,29350
-    function cerror(698,29722
-    function slogConfig(711,30330
-    function slogExpressEndpoint(789,33852
+shared/slogger.js,1068
+    function formatTimestamp(217,9407
+    function getTimezoneAbbr(238,10293
+    function errorToObject(254,10900
+    function stringify(269,11339
+    function startsWithEmoji(287,11731
+    function getDefaultEmoji(292,11892
+    function performSubstitution(306,12354
+    function processLogArgs(315,12753
+    function processComponentLogArgs(336,13482
+    function initFileLogging(361,14405
+    function rotateLogFileSizeBased(378,15081
+    function getTimestampForFilename(429,17597
+    function writeLogToFileSync(442,18139
+    function flushSocketBuffer(467,19387
+    function sendLogToSocket(522,21704
+    function ensureInitialized(589,24758
+    function logMessage(601,25401
+    function sdebug(669,28363
+    function slog(678,28700
+    function swarn(683,28868
+    function serror(692,29201
+    function csdebug(703,29606
+    function cslog(712,29982
+    function cswarn(717,30189
+    function cerror(726,30561
+    function slogConfig(739,31169
+    function slogExpressEndpoint(817,34691
+    function slogExpressEndpointx(879,36697
 
 slog,202
-const 24,816
-const __dirname 30,1029
-let configPath 34,1219
-const args 60,1981
-const possibleLevel 68,2211
-let level,69,2256
-let level, messageArgs;69,2256
-} else 73,2401
-const message 79,2510
+const 24,814
+const __dirname 30,1027
+let configPath 34,1217
+const args 60,1979
+const possibleLevel 68,2209
+let level,69,2254
+let level, messageArgs;69,2254
+} else 73,2399
+const message 79,2508
 
-soulscapes-client/package-lock.json,335
-  "requires": true,5,79
-      "optional": true,3059,122184
-      "hasInstallScript": true,5810,230238
-      "hasInstallScript": true,5834,231165
-      "optional": true,7126,278847
-      "hasInstallScript": true,8400,324995
-      "optional": true,8402,325051
-      "optional": true,15254,576429
-      "peer": true,16341,616622
+soulscapes-client/craco.config.js,85
+const path 2,19
+const ReactRefreshWebpackPlugin 3,49
+module.exports exports6,134
+
+soulscapes-client/package-lock.json,1393
+    "requires": true,5,85
+            "dev": true,2085,98420
+            "devOptional": true,2110,99407
+            "devOptional": true,2123,100006
+            "optional": true,3112,143628
+            "devOptional": true,3541,162765
+            "devOptional": true,3548,163129
+            "devOptional": true,3555,163491
+            "devOptional": true,3562,163853
+            "dev": true,5616,257623
+            "hasInstallScript": true,5906,270737
+            "hasInstallScript": true,5930,271810
+            "dev": true,5963,273337
+            "devOptional": true,5983,274074
+            "devOptional": true,6674,303501
+            "optional": true,7259,329141
+            "dev": true,8282,373023
+            "hasInstallScript": true,8543,383819
+            "optional": true,8545,383887
+            "dev": true,9693,432576
+            "dev": true,9908,441496
+            "devOptional": true,11386,506024
+            "dev": true,12126,537724
+            "dev": true,15015,661411
+            "optional": true,15447,680209
+            "devOptional": true,16344,718930
+            "devOptional": true,16388,720692
+            "devOptional": true,16401,721200
+            "peer": true,16598,729745
+            "devOptional": true,16821,739810
+            "dev": true,17106,751818
+            "dev": true,17339,761698
+            "devOptional": true,17823,783921
 
 soulscapes-client/package.json,26
     "private": true,4,59
@@ -90,16 +119,19 @@ soulscapes-client/public/test/pinchToZoom.html,57
 Pinch Zoom Box6,142
 const view = (() => {zoomMe28,600
 
-soulscapes-client/src/components/Avatar.js,70
-import React,1,0
-const Avatar 5,226
-export default Avatar;103,2596
+soulscapes-client/src/App.js,20
+function App(6,154
+
+soulscapes-client/src/components/Avatar.js,71
+import React,2,75
+const Avatar 6,301
+export default Avatar;104,2597
 
 soulscapes-client/src/components/AvatarClusterLayout.js,148
 import React,2,26
 const AvatarClusterLayout 13,321
-AvatarClusterLayout.propTypes propTypes243,7708
-export default AvatarClusterLayout;249,7841
+AvatarClusterLayout.propTypes propTypes243,7687
+export default AvatarClusterLayout;249,7820
 
 soulscapes-client/src/components/AvatarClusterLayout.js.bak,36
     function getRandomInt(143,4885
@@ -137,17 +169,24 @@ export default DividedLayout;157,4969
 soulscapes-client/src/components/DividedLayout.module.css,29
 .firstPane,firstPane18,345
 
+soulscapes-client/src/components/ErrorBoundary.js,98
+class ErrorBoundary extends React.Component Component4,115
+export default ErrorBoundary;29,767
+
+soulscapes-client/src/components/ErrorOverlay.js,31
+function ErrorOverlay(45,1009
+
 soulscapes-client/src/components/MessageList.js,59
 const MessageList 4,75
 export default MessageList;13,277
 
-soulscapes-client/src/components/ScrollLayout.js,175
-import React,1,0
-const isTrue 7,324
-const DebugScrolling 10,395
-const ScrollLayout 12,426
-ScrollLayout.propTypes propTypes220,6718
-export default ScrollLayout;228,7050
+soulscapes-client/src/components/ScrollLayout.js,176
+import React,2,75
+const isTrue 8,399
+const DebugScrolling 11,470
+const ScrollLayout 13,501
+ScrollLayout.propTypes propTypes221,6779
+export default ScrollLayout;229,7111
 
 soulscapes-client/src/components/SegmentedControl.js,69
 const SegmentedControl 4,80
@@ -164,40 +203,45 @@ const ZoomControl 7,244
 ZoomControl.propTypes propTypes23,785
 export default ZoomControl;29,934
 
-soulscapes-client/src/index.js,18
-const root 6,124
+soulscapes-client/src/index.js,19
+const root 30,917
 
 soulscapes-client/src/pages/Room.js,68
 import React,2,21
 const Room 16,737
-export default Room;160,5290
+export default Room;157,5048
 
-soulscapes-client/src/services/LocalAvatarManager.js,129
-class LocalAvatarManager extends EventEmitter 3,40
-const localAvatarManager 84,2315
-export default localAvatarManager;85,2368
+soulscapes-client/src/services/LocalAvatarManager.js,130
+class LocalAvatarManager extends EventEmitter 4,115
+const localAvatarManager 85,2242
+export default localAvatarManager;86,2295
 
-soulscapes-client/src/services/RemoteAvatarManager.js,132
-class RemoteAvatarManager extends EventEmitter 4,66
-const remoteAvatarManager 52,1156
-export default remoteAvatarManager;53,1211
+soulscapes-client/src/services/RemoteAvatarManager.js,133
+class RemoteAvatarManager extends EventEmitter 5,141
+const remoteAvatarManager 53,1157
+export default remoteAvatarManager;54,1212
 
-soulscapes-client/src/services/RoomManager.js,474
-class RoomManager 5,152
-    constructor(6,172
-    async joinRoom(42,1293
-    rejoinRoom(63,1981
-    async handleUserList(75,2342
-    async handleNewUser(82,2508
-    async handleUserLeft(93,2831
-    async startCall(98,2907
-    async handleOffer(152,5176
-    async handleOffer_old(199,7364
-    handleIceCandidate(251,9757
-    async handleAnswer(262,10339
-const roomManager 280,11011
-window.roomManager roomManager281,11050
-export default roomManager;282,11084
+soulscapes-client/src/services/RoomManager.js,443
+class RoomManager 7,297
+    constructor(8,317
+    async joinRoom(57,1878
+    rejoinRoom(87,2637
+    async handleUserList(97,2916
+    async handleNewUser(104,3085
+    async handleUserLeft(114,3333
+    async startCall(118,3408
+    async handleOffer(171,5221
+    async handleIceCandidate(220,6925
+    async handleAnswer(232,7368
+const roomManager 250,7856
+window.roomManager roomManager251,7895
+export default roomManager;252,7929
+
+soulscapes-client/src/utils/safeSocket.js,144
+export function wrapError(40,1364
+export function safeSocketHandler(51,1738
+export function safeOn(68,2329
+export function safeEmit(85,3112
 
 soulscapes-client/src/utils/zoomUtils.js,36
 export function applyZoomIn(14,620
@@ -205,13 +249,14 @@ export function applyZoomIn(14,620
 soulscapes-server/package-lock.json,25
   "requires": true,5,79
 
-soulscapes-server/server.js,122
-const app 7,145
-const server 8,168
-const io 9,207
-const rooms 16,308
-const roomsNamespace 19,361
-const PORT 87,2432
+soulscapes-server/server.js,123
+function wrapError(16,545
+function safeSocketHandler(29,1074
+function safeOn(61,2194
+    function flattenError(86,3178
+
+tags_generate.sh,19
+file_count=32,925
 
 tunnel_https.sh,12
 port=7,112

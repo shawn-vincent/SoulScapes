@@ -1,0 +1,1043 @@
+
+
+I would like to change the slogConfig() from what it is now to the version that follows.
+After these changes:
+
+      1. slogger should internally create a list of SlogTargets,
+
+      2. each of which has a "matchSelector()" method that gets passed
+      the log level and component
+      
+      3. if matchSelector() returns true, the "logMessage()" method is
+      called with all of the appropriate information about the log
+      message.
+      
+      4. The SlogTarget will write to the appropriate
+      backend. (console, file, socket, or custom class).
+
+See the current implementation pasted at the end of this file.
+
+// -------------------------------------------------------------------------
+// Config API
+// -------------------------------------------------------------------------
+
+slogConfig({
+
+    // more than one slog entry with a given selector can be listed,
+    // creates multiple output logs for selector
+ 
+    // ---- target types
+
+    /* shorthand for  slog: { type: "console" level: "debug" } */
+    slog: "debug", 
+
+    /* Console logging */
+    slog: {
+	type: "console"
+	level: "debug"
+    },
+
+    /* File logging */
+    slog: {
+	type: "file" // Node.js 
+	level: "debug"
+	path: "./slogger.log", // error if more than one slog entry 
+	rotateMaxSize: 1048576, // default to -1 (for no rotation)
+	rotateMaxFiles: 5
+    },
+
+    /* Socket logging */
+    slog: {
+        type: "remote" // send log through socket.
+	enabled: true,
+	endpoint: "http://yourserver.com/logs",
+	bufferSize: 5,
+	uniqueClientId: function(req) {
+	    // Default: return the client’s IP address (if available).
+	    return req && req.ip ? req.ip : "unknown";
+	}
+    }
+
+    /*
+      Custom logging -- other loggers are based on this one, and allow
+      logging to be extended arbitrarily.  The object passed in here
+      ges called wih some method that passes all of the element of the
+      log line separately so that it can, for example, map the log to
+      other logging systems.  */
+    slog: {
+	type: new CustomLogger();
+    }
+
+
+    // ---- selectors
+    
+    /* default slogging */
+    slog: { ... }
+    
+    /*  component-specific logging (cslog()).  if ANY
+        component-specific slog entries exist, overrides default
+        behavior for component*/
+    slog.component { ... }
+    
+    /* future: components can be nested in log statements */
+    slog.parentComponent.childComponent { ... }
+    slog.a.b.c { ... }
+    
+    /* magic component: selects logs received from sockets from remote clients */
+    slog._remote: { ... }
+
+    /* specific client logging */
+    slog._remote[clientId]: { ... }  
+
+    /* future: component specifig logging from remote components */
+    slog._remote.component: { ... }  
+    slog._remote[client123].component: { ... }  
+    slog._remote[192.168.0.13].a.b.c: { ... }  
+
+});
+
+
+// -------------------------------------------------------------------------
+// Log syntax
+// -------------------------------------------------------------------------
+
+/*
+Examples of log syntax:
+
+// basic slog line: 'log' level
+[Feb 10 '25 18:30:08.583 EST] ℹ️ Log message goes here { s: "JS Object 1" } { s: "JS Object 2" }
+
+// Log levels: debug, log, warn, and error levels with default Emoji (case insensitive, these are default cases)
+[Feb 10 '25 18:30:08.583 EST] 🐛 debug: Debug message { s: "JS Object 1" }
+[Feb 10 '25 18:30:08.583 EST] ℹ️ Log message
+[Feb 10 '25 18:30:08.583 EST] ⚠️ WARN: Warning message
+[Feb 10 '25 18:30:08.583 EST] ❌ ERROR: Error message { text: "obj 1" } { text: "obj 2" } { text: "obj 3" }
+[Feb 10 '25 18:30:08.583 EST] 🚀 random: this is just a 'log' message.  Only 'debug/warn/error' are special
+
+// CUstom EMOJI
+[Feb 10 '25 18:30:08.583 EST] 🚀 Log message with custom emoji
+
+// Components
+[Feb 11 '25 07:15:42.829 EST] .componentName 🚀 Log message for component { foo: 123 }
+[Feb 11 '25 07:15:42.829 EST] . 🚀 Component name can be empty
+[Feb 11 '25 07:15:42.829 EST] .a.b ℹ️ nested component
+[Feb 11 '25 07:15:42.829 EST] .a.b.c ⚠️ WARN: extra-nested component
+
+// Remote client logs - remote log message's component prepended with "._remoote[clientId]
+// date/time (and all other log lines) is from client
+[Feb 11 '25 07:15:42.829 EST] ._remote:[clientId] 🚀 Log message from remote client { bar: true }
+[Feb 11 '25 07:15:42.829 EST] ._remote:[] 🚀 Name can be empty
+[Feb 11 '25 07:15:42.829 EST] ._remote[192.168.0.4].componentName ℹ️ remote nested component
+[Feb 11 '25 07:15:42.829 EST] ._remote[192.168.0.4].a.b.c ⚠️ WARN: extra-nested component
+
+*/
+
+// --------------------------------------------------------------------------
+// Logging API
+// --------------------------------------------------------------------------
+
+// --- message
+slog("Message")
+// [Feb 10 '25 18:30:08.583 EST] ℹ️ Message
+
+// --- custom EMOJI
+slog("🚀Message")
+// [Feb 10 '25 18:30:08.583 EST] 🚀Message
+
+// --- log levels
+sdebug("Message")
+// [Feb 10 '25 18:30:08.583 EST] 🐛 debug: Message
+swarn("Message")
+// [Feb 10 '25 18:30:08.583 EST] ⚠️ WARN: Message
+serror("Message")
+// [Feb 10 '25 18:30:08.583 EST] ❌ ERROR: Message
+
+// --- log level edge cases
+swarn("🚀 Message")
+// [Feb 10 '25 18:30:08.583 EST] 🚀 WARN: Message
+swarn("🚀Message")
+// [Feb 10 '25 18:30:08.583 EST] 🚀 WARN: Message
+swarn("🚀warn:Message")
+// [Feb 10 '25 18:30:08.583 EST] 🚀 WARN: Message
+swarn("warn:Message")
+// [Feb 10 '25 18:30:08.583 EST] ⚠️ WARN: Message
+
+// --- Javascript objects
+slog("Message", {foo:123,bar:234})
+// [Feb 10 '25 18:30:08.583 EST] ℹ️ { foo:123, bar:234 }
+slog("Message", {foo:123,bar:234}, {baz:"345"})
+// [Feb 10 '25 18:30:08.583 EST] ℹ️ { foo:123, bar:234} { baz:345 }
+slog("Message", {foo:123,bar:234}, {baz:"345"}, "456", 789, true)
+// [Feb 10 '25 18:30:08.583 EST] ℹ️ { foo:123, bar:234} { baz:345 } "456" 789 true
+
+// --- Components
+cslog("component", "Message")
+// [Feb 10 '25 18:30:08.583 EST] .component ℹ️ Message
+cslog("a.b", "Message")
+// [Feb 10 '25 18:30:08.583 EST] .a.b ℹ️ Message
+
+
+===== old slogger.js to be updated to match new API above ====
+#!/usr/bin/env node
+/**
+ * slogger – A Versatile, Thread‐Safe Logging Library (Updated Version)
+ *
+ * This library supports multiple backends (console, file, socket) and
+ * offers both global and component-specific logging functions.
+ *
+ * Public API functions:
+ *   sdebug, slog, swarn, serror
+ *   csdebug, cslog, cswarn, cerror
+ *
+ * Each log message is prefixed with a timestamp. If a component is provided,
+ * it appears (preceded by a dot and a space) right after the timestamp.
+ *
+ * Each log message is formatted so that:
+ *   - If the message begins with a custom emoji, that emoji is used.
+ *   - Otherwise, a default emoji (based on the log level) is prepended.
+ *   - The log level label is fixed: for "debug" it remains lowercase,
+ *     for "warn" and "error" it’s uppercase; and for "log" no level label is output.
+ *
+ * Example:
+ *   [Feb 11 '25 08:35:52.174 EST] .auth 🐛 debug: User alice logged in
+ *   [Feb 11 '25 08:35:52.174 EST] ✅ WARN: Test   (if a custom emoji is provided)
+ *   [Feb 11 '25 08:35:52.174 EST] Plain informational message without a label.
+ */
+
+(function (global, factory) {
+    // UMD wrapper: works in Node.js (CommonJS) and in browsers.
+    if (typeof module !== "undefined" && module.exports) {
+        const slogger = factory();
+        global.sdebug = slogger.sdebug;
+        global.slog = slogger.slog;
+        global.swarn = slogger.swarn;
+        global.serror = slogger.serror;
+        global.csdebug = slogger.csdebug;
+        global.cslog = slogger.cslog;
+        global.cswarn = slogger.cswarn;
+        global.cerror = slogger.cerror;
+        global.slogConfig = slogger.slogConfig;
+        global.slogExpressEndpoint = slogger.slogExpressEndpoint;
+        module.exports = slogger;
+    } else {
+        const slogger = factory();
+        global.slogger = slogger;
+        global.sdebug = slogger.sdebug;
+        global.slog = slogger.slog;
+        global.swarn = slogger.swarn;
+        global.serror = slogger.serror;
+        global.csdebug = slogger.csdebug;
+        global.cslog = slogger.cslog;
+        global.cswarn = slogger.cswarn;
+        global.cerror = slogger.cerror;
+        global.slogConfig = slogger.slogConfig;
+        global.slogExpressEndpoint = slogger.slogExpressEndpoint;
+    }
+})(typeof global !== "undefined" ? global : this, function () {
+    "use strict";
+
+    // --- Log level definitions (lower number = more verbose) ---
+    const LEVELS = {
+        debug: 0,
+        log: 1,
+        warn: 2,
+        error: 3,
+        none: Infinity
+    };
+
+    // --- Global configuration (modifiable via slogConfig) ---
+    const config = {
+        logLevel: { default: LEVELS.debug },
+        consoleLogLevel: { default: LEVELS.debug },
+        logFile: {
+            enabled: false,
+            path: "./slogger.log",
+            maxSize: 1048576,
+            maxFiles: 5,
+            rollingPattern: null
+        },
+        socketLogging: {
+            enabled: false,
+            endpoint: "",
+            bufferSize: 0
+        },
+        uniqueClientId: function (req) {
+            return req && req.ip ? req.ip : "unknown";
+        }
+    };
+
+    // --- Environment detection ---
+    const isNode = (typeof process !== "undefined" &&
+                    process.stdout &&
+                    process.stderr);
+    const isBrowser = !isNode;
+    let fs, http, https, url, pathModule;
+    if (isNode) {
+        fs = require("fs");
+        http = require("http");
+        https = require("https");
+        url = require("url");
+        pathModule = require("path");
+    }
+
+    // --- Socket Logging Buffer and Guard ---
+    let socketBuffer = [];
+    let skipSocketLogging = false;
+
+    // --- Timestamp Formatting ---
+    const formatTimestamp = date => {
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const month = months[date.getMonth()];
+        const day = date.getDate();
+        const fullYear = date.getFullYear();
+        const yearStr = fullYear >= 2000 && fullYear <= 2099 ? ("'" + String(fullYear).slice(-2)) : fullYear;
+        const pad = (n, digits = 2) => String(n).padStart(digits, "0");
+        const hours = pad(date.getHours());
+        const minutes = pad(date.getMinutes());
+        const seconds = pad(date.getSeconds());
+        const ms = pad(date.getMilliseconds(), 3);
+        const tz = getTimezoneAbbr(date);
+        return `${month} ${day} ${yearStr} ${hours}:${minutes}:${seconds}.${ms} ${tz}`;
+    };
+
+    const getTimezoneAbbr = date => {
+        const match = date.toTimeString().match(/\(([^)]+)\)$/);
+        return match && match[1] ? match[1].split(" ").map(w => w[0]).join("") : "";
+    };
+
+    // --- Helpers for stringification ---
+    const errorToObject = err => ({
+        message: err.message,
+        stack: err.stack,
+        ...(err.cause ? { cause: errorToObject(err.cause) } : {})
+    });
+
+    const stringify = arg => {
+        if (arg instanceof Error) {
+            try {
+                return JSON.stringify(errorToObject(arg));
+            } catch (e) {
+                return arg.toString();
+            }
+        } else if (typeof arg === "object") {
+            try {
+                return JSON.stringify(arg);
+            } catch (e) {
+                return String(arg);
+            }
+        }
+        return String(arg);
+    };
+
+    // --- Helper: Check if text starts with an emoji ---
+    const startsWithEmoji = text => (/^\p{Extended_Pictographic}/u).test(text);
+
+    // --- Default Emoji based on level ---
+    const getDefaultEmoji = level => {
+        switch (level) {
+        case "debug": return "🐛 ";
+        case "log":   return "ℹ️ ";
+        case "warn":  return "⚠️ ";
+        case "error": return "❌ ";
+        default:      return "";
+        }
+    };
+
+    // --- Substitution Support ---
+    const performSubstitution = (message, map) =>
+          message.replace(/\$\{([^}]+)\}/g, (match, key) =>
+              Object.prototype.hasOwnProperty.call(map, key) ? map[key] : match
+          );
+
+    // --- Process log arguments (non-component) ---
+    const processLogArgs = args => {
+        let substitutionMap = null, msg, remaining;
+        if (
+            args.length >= 2 &&
+		typeof args[0] === "object" && args[0] !== null &&
+		!Array.isArray(args[0]) &&
+		!(args[0] instanceof Error) &&
+		typeof args[1] === "string"
+        ) {
+            substitutionMap = args[0];
+            msg = performSubstitution(args[1], substitutionMap);
+            remaining = args.slice(2);
+        } else {
+            msg = args[0];
+            remaining = args.slice(1);
+        }
+        return { msg, remaining };
+    };
+
+    // --- Process log arguments (component-specific) ---
+    const processComponentLogArgs = (component, args) => {
+        let substitutionMap = null, msg, remaining;
+        if (
+            args.length >= 2 &&
+		typeof args[0] === "object" && args[0] !== null &&
+		!Array.isArray(args[0]) &&
+		!(args[0] instanceof Error) &&
+		typeof args[1] === "string"
+        ) {
+            substitutionMap = args[0];
+            msg = performSubstitution(args[1], substitutionMap);
+            remaining = args.slice(2);
+        } else {
+            msg = args[0];
+            remaining = args.slice(1);
+        }
+        return { msg, remaining, component };
+    };
+
+    // --- File Logging Support (Node.js Only) ---
+    let currentFileSize = 0;
+    const initFileLogging = () => {
+        if (isNode && config.logFile.enabled && config.logFile.path) {
+            try {
+                currentFileSize = fs.existsSync(config.logFile.path)
+                    ? fs.statSync(config.logFile.path).size
+                    : 0;
+            } catch (err) {
+                cerror("slogger", "Error initializing log file", err);
+            }
+        }
+    };
+
+    const rotateLogFileSizeBased = () => {
+        const logPath = config.logFile.path;
+        const now = new Date();
+        let rolledFileName = "";
+        if (config.logFile.rollingPattern && typeof config.logFile.rollingPattern === "string") {
+            rolledFileName = config.logFile.rollingPattern
+                .replace(/yyyy/g, now.getFullYear())
+                .replace(/mm/g, String(now.getMonth() + 1).padStart(2, '0'))
+                .replace(/dd/g, String(now.getDate()).padStart(2, '0'))
+                .replace(/hh/g, String(now.getHours()).padStart(2, '0'))
+                .replace(/MM/g, String(now.getMinutes()).padStart(2, '0'))
+                .replace(/ss/g, String(now.getSeconds()).padStart(2, '0'))
+                .replace(/SSS/g, String(now.getMilliseconds()).padStart(3, '0'))
+                .replace(/TZ/g, getTimezoneAbbr(now));
+        } else {
+            let base = logPath.toLowerCase().endsWith(".log") ? logPath.slice(0, -4) : logPath;
+            rolledFileName = `${base}-[${getTimestampForFilename(now)}].log`;
+        }
+        try {
+            if (fs.existsSync(logPath)) fs.renameSync(logPath, rolledFileName);
+            currentFileSize = 0;
+            const dir = pathModule.dirname(logPath);
+            const baseName = pathModule.basename(logPath, ".log");
+            const pattern = new RegExp("^" + baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "-\\[.*\\]\\.log$");
+            const files = fs.readdirSync(dir).filter(f => pattern.test(f));
+            if (files.length > config.logFile.maxFiles) {
+                files.sort();
+                const toDelete = files.slice(0, files.length - config.logFile.maxFiles);
+                toDelete.forEach(file => {
+                    try {
+                        fs.unlinkSync(pathModule.join(dir, file));
+                    } catch (e) {
+                        cerror("slogger", "Error deleting old rolled file", file, e);
+                    }
+                });
+            }
+        } catch (err) {
+            cerror("slogger", "Size-based file rotation error", err);
+            throw err;
+        }
+    };
+
+    const getTimestampForFilename = date => {
+        const pad = (n, digits = 2) => String(n).padStart(digits, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}_${pad(date.getMinutes())}_${pad(date.getSeconds())}_${pad(date.getMilliseconds(), 3)}_${getTimezoneAbbr(date)}`;
+    };
+
+    const writeLogToFileSync = message => {
+        try {
+            if (!config.logFile.enabled) return;
+            const dir = pathModule.dirname(config.logFile.path);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+                logMessage("warn", "File logging directory created: " + dir, [], "slogger", { skipFile: true });
+            }
+            const messageSize = Buffer.byteLength(message + "\n", "utf8");
+            if (currentFileSize + messageSize > config.logFile.maxSize) {
+                rotateLogFileSizeBased();
+            }
+            fs.appendFileSync(config.logFile.path, message + "\n");
+            currentFileSize += messageSize;
+        } catch (err) {
+            logMessage("error", "File logging error: " + err.message, [], "slogger", { skipFile: true });
+        }
+    };
+
+    // --- Socket Logging Support ---
+    const flushSocketBuffer = () => {
+        if (!socketBuffer.length) return;
+        const payload = JSON.stringify({ messages: socketBuffer });
+        try {
+            if (isNode) {
+                const parsedUrl = url.parse(config.socketLogging.endpoint);
+                const options = {
+                    hostname: parsedUrl.hostname,
+                    port: parsedUrl.port,
+                    path: parsedUrl.path,
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Content-Length": Buffer.byteLength(payload)
+                    }
+                };
+                const reqModule = parsedUrl.protocol === "https:" ? https : http;
+                const req = reqModule.request(options, res => res.on("data", () => {}));
+                req.on("error", err => {
+                    if (!skipSocketLogging) {
+                        skipSocketLogging = true;
+                        serror("Socket logging error (flush): " + err.message);
+                        skipSocketLogging = false;
+                    }
+                });
+                req.write(payload);
+                req.end();
+            } else if (typeof fetch === "function") {
+                fetch(config.socketLogging.endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: payload
+                }).catch(err => {
+                    if (!skipSocketLogging) {
+                        skipSocketLogging = true;
+                        serror("Socket logging error (flush): " + err.message);
+                        skipSocketLogging = false;
+                    }
+                });
+            } else {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", config.socketLogging.endpoint, true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(payload);
+            }
+        } catch (err) {
+            if (!skipSocketLogging) {
+                skipSocketLogging = true;
+                serror("Socket logging error (flush): " + err.message);
+                skipSocketLogging = false;
+            }
+        }
+        socketBuffer = [];
+    };
+
+    const sendLogToSocket = message => {
+        if (!(config.socketLogging && config.socketLogging.enabled && config.socketLogging.endpoint)) return;
+        if (config.socketLogging.bufferSize && config.socketLogging.bufferSize > 0) {
+            socketBuffer.push(message);
+            if (socketBuffer.length >= config.socketLogging.bufferSize) flushSocketBuffer();
+        } else {
+            const payload = JSON.stringify({ message });
+            try {
+                if (isNode) {
+                    const parsedUrl = url.parse(config.socketLogging.endpoint);
+                    const options = {
+                        hostname: parsedUrl.hostname,
+                        port: parsedUrl.port,
+                        path: parsedUrl.path,
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Content-Length": Buffer.byteLength(payload)
+                        }
+                    };
+                    const reqModule = parsedUrl.protocol === "https:" ? https : http;
+                    const req = reqModule.request(options, res => res.on("data", () => {}));
+                    req.on("error", err => {
+                        if (!skipSocketLogging) {
+                            skipSocketLogging = true;
+                            serror("Socket logging error: " + err.message);
+                            skipSocketLogging = false;
+                        }
+                    });
+                    req.write(payload);
+                    req.end();
+                } else if (typeof fetch === "function") {
+                    fetch(config.socketLogging.endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: payload
+                    }).catch(err => {
+                        if (!skipSocketLogging) {
+                            skipSocketLogging = true;
+                            serror("Socket logging error: " + err.message);
+                            skipSocketLogging = false;
+                        }
+                    });
+                } else {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("POST", config.socketLogging.endpoint, true);
+                    xhr.setRequestHeader("Content-Type", "application/json");
+                    xhr.send(payload);
+                }
+            } catch (err) {
+                if (!skipSocketLogging) {
+                    skipSocketLogging = true;
+                    serror("Socket logging error: " + err.message);
+                    skipSocketLogging = false;
+                }
+            }
+        }
+    };
+
+    // --- Delayed Initialization ---
+    let _initialized = false;
+    const ensureInitialized = () => {
+        if (!_initialized) {
+            _initialized = true;
+            logMessage("log", "🚀 slogger initialized: ready to slog!", [], "slogger", {
+                prependNewlines: 5,
+                skipFile: true,
+                skipSocket: true
+            });
+        }
+    };
+
+    // --- Helper: Format Message for a Given Level ---
+    // For a given log level (debug, log, warn, error):
+    //   - If the level is "log", no level label is added.
+    //   - For other levels, the message is prefixed with the default (or custom) emoji
+    //     and the fixed-case level label.
+    function formatMessage(level, msg) {
+        if (level === "log") {
+	    // For "log", do not output any level label, but still prepend the default log emoji.
+	    const emojiMatch = msg.match(/^(\p{Extended_Pictographic}+)\s*(.*)$/u);
+	    if (emojiMatch) {
+		// Use the custom emoji if present.
+		return `${emojiMatch[1]} ${emojiMatch[2].trim()}`;
+	    }
+	    const prefixMatch = msg.match(/^\s*log:\s*(.*)$/i);
+	    if (prefixMatch) {
+		return `${getDefaultEmoji("log")}${prefixMatch[1].trim()}`;
+	    }
+	    // Prepend the default log emoji.
+	    return `${getDefaultEmoji("log")}${msg}`;
+	} else {
+            // For other levels, "debug" remains lowercase; "warn" and "error" become uppercase.
+            const fixedcaseLevel = level === "debug" ? level.toLowerCase() : level.toUpperCase();
+            const emojiMatch = msg.match(/^(\p{Extended_Pictographic}+)\s*(.*)$/u);
+            if (emojiMatch) {
+                return `${emojiMatch[1]} ${fixedcaseLevel}: ${emojiMatch[2].trim()}`;
+            }
+            const prefixRegex = new RegExp(`^\\s*${level}:\\s*(.*)$`, "i");
+            const prefixMatch = msg.match(prefixRegex);
+            if (prefixMatch) {
+                return `${getDefaultEmoji(level)}${fixedcaseLevel}: ${prefixMatch[1].trim()}`;
+            }
+            return `${getDefaultEmoji(level)}${fixedcaseLevel}: ${msg}`;
+        }
+    }
+
+    // --- Core Logging Function ---
+    // Accepts: level, msg, extraArgs (an array), an optional component,
+    // and an options object (supports skipFile, skipSocket, and prependNewlines).
+    function logMessage(level, msg, extraArgs, component = "", opts = {}) {
+        const now = new Date();
+        const timestamp = formatTimestamp(now);
+        // Build the log line with a space after the timestamp.
+        let line = `[${timestamp}] `;
+        if (component) {
+            line += `.${component} `;
+        }
+        line += msg;
+        if (extraArgs && extraArgs.length > 0) {
+            line += " " + extraArgs.map(stringify).join(" ");
+        }
+        if (opts.prependNewlines) {
+            line = "\n".repeat(opts.prependNewlines) + line;
+        }
+
+        // Determine effective log levels.
+        const effectiveConsoleLevel =
+              config.consoleLogLevel[component] !== undefined
+              ? config.consoleLogLevel[component]
+              : config.consoleLogLevel.default;
+        const effectiveGlobalLevel =
+              config.logLevel[component] !== undefined
+              ? config.logLevel[component]
+              : config.logLevel.default;
+
+        // Console Logging.
+        try {
+            if (LEVELS[level] >= effectiveConsoleLevel) {
+                if (isNode) {
+                    (level === "error" ? process.stderr : process.stdout).write(line + "\n");
+                } else {
+                    if (level === "debug") console.debug(line);
+                    else if (level === "log") console.log(line);
+                    else if (level === "warn") console.warn(line);
+                    else if (level === "error") console.error(line);
+                }
+            }
+        } catch (consoleErr) {
+            if (isNode) process.stderr.write("Console logging failed: " + consoleErr.message + "\n");
+            else alert("Critical logging failure: " + consoleErr.message);
+        }
+
+        // File Logging.
+        if (!opts.skipFile && config.logFile.enabled && LEVELS[level] >= effectiveGlobalLevel) {
+            if (!isNode) {
+                serror("File logging is enabled but not supported in this environment.");
+                throw new Error("File logging is enabled but not supported in this environment.");
+            }
+            writeLogToFileSync(line);
+        }
+
+        // Socket Logging.
+        if (!opts.skipSocket && config.socketLogging.enabled && LEVELS[level] >= effectiveGlobalLevel) {
+            sendLogToSocket(line);
+        }
+    }
+
+    // --- Public API Functions for Non-Component Logging ---
+    function sdebug(...args) {
+        ensureInitialized();
+        const { msg, remaining } = processLogArgs(args);
+        const finalMsg = typeof msg === "string" ? formatMessage("debug", msg) : msg;
+        logMessage("debug", finalMsg, remaining, "");
+    }
+    function slog(...args) {
+        ensureInitialized();
+        const { msg, remaining } = processLogArgs(args);
+        const finalMsg = typeof msg === "string" ? formatMessage("log", msg) : msg;
+        logMessage("log", finalMsg, remaining, "");
+    }
+    function swarn(...args) {
+        ensureInitialized();
+        const { msg, remaining } = processLogArgs(args);
+        const finalMsg = typeof msg === "string" ? formatMessage("warn", msg) : msg;
+        logMessage("warn", finalMsg, remaining, "");
+    }
+    function serror(...args) {
+        ensureInitialized();
+        const { msg, remaining } = processLogArgs(args);
+        const finalMsg = typeof msg === "string" ? formatMessage("error", msg) : msg;
+        logMessage("error", finalMsg, remaining, "");
+    }
+
+    // --- Public API Functions for Component-Specific Logging ---
+    function csdebug(component, ...args) {
+        ensureInitialized();
+        const { msg, remaining } = processComponentLogArgs(component, args);
+        const finalMsg = typeof msg === "string" ? formatMessage("debug", msg) : msg;
+        logMessage("debug", finalMsg, remaining, component);
+    }
+    function cslog(component, ...args) {
+        ensureInitialized();
+        const { msg, remaining } = processComponentLogArgs(component, args);
+        const finalMsg = typeof msg === "string" ? formatMessage("log", msg) : msg;
+        logMessage("log", finalMsg, remaining, component);
+    }
+    function cswarn(component, ...args) {
+        ensureInitialized();
+        const { msg, remaining } = processComponentLogArgs(component, args);
+        const finalMsg = typeof msg === "string" ? formatMessage("warn", msg) : msg;
+        logMessage("warn", finalMsg, remaining, component);
+    }
+    function cerror(component, ...args) {
+        ensureInitialized();
+        const { msg, remaining } = processComponentLogArgs(component, args);
+        const finalMsg = typeof msg === "string" ? formatMessage("error", msg) : msg;
+        logMessage("error", finalMsg, remaining, component);
+    }
+
+    // --- Configuration Function ---
+    function slogConfig(options) {
+        if (options.logLevel !== undefined) {
+            if (typeof options.logLevel === "string") {
+                const lvl = options.logLevel.toLowerCase();
+                if (lvl in LEVELS) config.logLevel.default = LEVELS[lvl];
+            } else if (typeof options.logLevel === "number") {
+                config.logLevel.default = options.logLevel;
+            }
+        }
+        Object.keys(options)
+            .filter(key => key.startsWith("logLevel."))
+            .forEach(key => {
+                const comp = key.slice("logLevel.".length);
+                const val = options[key];
+                if (typeof val === "string") {
+                    const lvl = val.toLowerCase();
+                    if (lvl in LEVELS) config.logLevel[comp] = LEVELS[lvl];
+                } else if (typeof val === "number") {
+                    config.logLevel[comp] = val;
+                }
+            });
+        if (options.console !== undefined) {
+            if (typeof options.console === "string") {
+                const lvl = options.console.toLowerCase();
+                if (lvl in LEVELS) config.consoleLogLevel.default = LEVELS[lvl];
+            } else if (typeof options.console === "number") {
+                config.consoleLogLevel.default = options.console;
+            }
+        }
+        Object.keys(options)
+            .filter(key => key.startsWith("console."))
+            .forEach(key => {
+                const comp = key.slice("console.".length);
+                const val = options[key];
+                if (typeof val === "string") {
+                    const lvl = val.toLowerCase();
+                    if (lvl in LEVELS) config.consoleLogLevel[comp] = LEVELS[lvl];
+                } else if (typeof val === "number") {
+                    config.consoleLogLevel[comp] = val;
+                }
+            });
+        if (options.logFile !== undefined) {
+            config.logFile = Object.assign({}, config.logFile, options.logFile);
+            if (config.logFile.enabled && !isNode) {
+                serror("File logging is enabled but not supported in this environment.");
+                throw new Error("File logging is enabled but not supported in this environment.");
+            }
+            if (config.logFile.enabled) initFileLogging();
+        }
+        if (options.socketLogging !== undefined) {
+            config.socketLogging = Object.assign({}, config.socketLogging, options.socketLogging);
+        }
+        if (options.uniqueClientId !== undefined && typeof options.uniqueClientId === "function") {
+            config.uniqueClientId = options.uniqueClientId;
+        }
+        logMessage("log", "Slogging configuration set: " + JSON.stringify(config), [], "slogger");
+    }
+
+    /**
+     * Parses a slog-generated log line and returns a JavaScript object with the parsed components.
+     *
+     * Expected log line format:
+     *   [<TIMESTAMP>] [.component] <MESSAGE> [<OBJECT> ...]
+     *
+     * Examples:
+     *   [Feb 11 '25 08:35:52.174 EST] .foo.bar ⚠️ WARN: Some warning message { foo: 123 }
+     *   [Feb 10 '25 18:30:08.583 EST] ℹ️ Log message without component { a: 1 } { b: 2 }
+     *
+     * The returned object has the following keys:
+     *   - timestamp: string (e.g., "Feb 11 '25 08:35:52.174 EST")
+     *   - component: string or null (e.g., "foo.bar")
+     *   - message: string (the message text without any trailing objects)
+     *   - objects: an array of strings (each representing one object portion)
+     *
+     * @param {string} line - The complete log line.
+     * @returns {Object} The parsed log components.
+     */
+    function slogParseLine(line) {
+	const result = {};
+
+	// Extract the timestamp (assumes it is enclosed in '[' and ']')
+	const timestampMatch = line.match(/^\[([^\]]+)\]/);
+	if (timestampMatch) {
+	    result.timestamp = timestampMatch[1].trim();
+	} else {
+	    result.timestamp = null;
+	}
+
+	// Remove the timestamp portion and any following whitespace.
+	let rest = line.replace(/^\[[^\]]+\]\s*/, "");
+
+	// Check if the next part is a component (starts with a dot).
+	let component = null;
+	if (rest.startsWith(".")) {
+	    // Capture the component until the first whitespace.
+	    const compMatch = rest.match(/^(\.[^\s]+)\s+/);
+	    if (compMatch) {
+		component = compMatch[1].trim();
+		rest = rest.slice(compMatch[0].length);
+	    } else {
+		// If there's no trailing space, assume the rest is the component.
+		const compOnlyMatch = rest.match(/^(\.[^\s]+)$/);
+		if (compOnlyMatch) {
+		    component = compOnlyMatch[1].trim();
+		    rest = "";
+		}
+	    }
+	}
+	// Remove the leading dot from the component if present.
+	result.component = component ? component.slice(1) : null;
+
+	// Now, 'rest' contains the message and possibly appended objects.
+	// We'll assume that objects (if present) appear as substrings that start with a space and a "{".
+	// Split the string at the first occurrence of " {".
+	let message = rest;
+	let objects = [];
+
+	const objStartIndex = rest.search(/\s\{/);
+	if (objStartIndex !== -1) {
+	    message = rest.slice(0, objStartIndex).trim();
+	    // Match all objects in the remainder. (This simple regex assumes objects do not contain a "}" inside string values.)
+	    const objectMatches = [...rest.matchAll(/\s(\{[^}]*\})/g)];
+	    objects = objectMatches.map(match => match[1].trim());
+	} else {
+	    message = rest.trim();
+	}
+
+	result.message = message;
+	result.objects = objects;
+
+	return result;
+    }
+
+    // --- Express Endpoint Support (Node.js Only) ---
+    function slogExpressEndpoint(app, endpoint) {
+        cslog("slogger", "Creating Slogger express endpoint", { app, endpoint });
+        if (!app || typeof app.post !== "function") {
+            throw new Error("Invalid Express app instance provided.");
+        }
+        app.post(endpoint, (req, res) => {
+            cslog("slogger", "Received log payload:", req.body);
+            const body = req.body;
+            if (!body || !body.message) {
+                res.status(400).send("Invalid log message payload.");
+                return;
+            }
+            let clientId = "unknown";
+            try {
+                clientId = config.uniqueClientId(req);
+            } catch (err) {
+                clientId = "unknown";
+            }
+            const augmentedMessage = `[CLIENT ${clientId}] ${body.message}`;
+            const level = (body.level || "log").toLowerCase();
+            if (level === "debug") sdebug(augmentedMessage);
+            else if (level === "warn") swarn(augmentedMessage);
+            else if (level === "error") serror(augmentedMessage);
+            else slog(augmentedMessage);
+            res.status(200).send("Logged");
+        });
+    }
+
+    return {
+        sdebug,
+        slog,
+        swarn,
+        serror,
+        csdebug,
+        cslog,
+        cswarn,
+        cerror,
+        slogConfig,
+        slogExpressEndpoint
+    };
+});
+
+/*
+LOG LINE FORMAT SPECIFICATION
+
+This document describes the log line format produced by the slogger library.
+Every log line consists of:
+  - a TIMESTAMP,
+  - an optional COMPONENT prefix,
+  - a formatted MESSAGE, and
+  - optionally one or more OBJECTS (JavaScript object representations).
+
+OVERVIEW
+
+A log line has the following overall structure:
+
+    [<TIMESTAMP>] [<COMPONENT>] <MESSAGE> [<OBJECT> ...]
+
+Where:
+
+TIMESTAMP:
+  Enclosed in square brackets, the timestamp is formatted as follows:
+
+      [MON D 'YY HH:MM:SS.MMM TZ]
+
+  For example:
+
+      [FEB 10 '25 18:30:08.583 EST]
+
+COMPONENT (OPTIONAL):
+  If provided, the component prefix appears immediately after the timestamp.
+  It is preceded by a period and a space. Examples:
+      .COMPONENTNAME
+      .A.B.C
+      ._REMOTE[CLIENTID].COMPONENTNAME
+
+MESSAGE:
+  The message portion may begin with an emoji. If no custom emoji is provided,
+  a default emoji (based on the log level) is prepended.
+  
+  For log levels other than "log", a fixed-case level label is inserted before the message text:
+      - For "debug": the label is "debug:"
+      - For "warn":  the label is "WARN:"
+      - For "error": the label is "ERROR:"
+  
+  For the "log" level, no level label is output; however, the default log emoji is still prepended.
+
+OBJECTS (OPTIONAL):
+  One or more JavaScript objects (formatted in a JSON-like style) may follow the message.
+  Each object is enclosed in curly braces { ... }.
+
+GRAMMAR (EBNF STYLE)
+
+  LogLine       ::= Timestamp " " Component? " " Message Objects?
+  Timestamp     ::= "[" Month " " Day " " Year " " Time " " TZ "]"
+  Month         ::= "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
+                    "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
+  Day           ::= Digit { Digit }           (* 1 or 2 digits *)
+  Year          ::= "'" Digit Digit | Digit Digit Digit Digit
+  Time          ::= HH ":" MM ":" SS "." MMM
+  HH            ::= Digit Digit
+  MM            ::= Digit Digit
+  SS            ::= Digit Digit
+  MMM           ::= Digit Digit Digit
+  TZ            ::= Letter { Letter }         (* Timezone abbreviation *)
+
+  Component     ::= "." ( RemoteComponent | ComponentName { "." ComponentName } )
+  RemoteComponent ::= "_REMOTE" ( "[" ClientId "]" | ":[" ClientId "]" )
+  ComponentName ::= Identifier
+  ClientId      ::= Identifier
+  Identifier    ::= Letter ( Letter | Digit | "_" )*
+
+  Message       ::= (Emoji " ")? (LevelPrefix " ")? Text
+  Emoji         ::= (one or more Unicode Extended Pictographic characters)
+  LevelPrefix   ::= "debug:" | "WARN:" | "ERROR:"  
+                  (Note: for log level "log", no prefix is output)
+  Text          ::= NonEmptyString
+
+  Objects       ::= { " " Object }*
+  Object        ::= "{" ... "}"           (* JavaScript object literal as a string *)
+
+  Digit         ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+  Letter        ::= "A" | "B" | ... | "Z" | "a" | "b" | ... | "z"
+  NonEmptyString::= (any non-empty string of characters, trimmed)
+
+EXAMPLES
+
+1. BASIC LOG MESSAGE:
+   [FEB 10 '25 18:30:08.583 EST] ℹ️ Log message goes here { s: "JS Object 1" } { s: "JS Object 2" }
+
+2. DEBUG LEVEL WITH CUSTOM EMOJI:
+   [FEB 10 '25 18:30:08.583 EST] 🐛 debug: Debug message { s: "JS Object 1" }
+
+3. WARNING LEVEL WITH COMPONENT:
+   [FEB 11 '25 07:15:42.829 EST] .A.B.C ⚠️ WARN: extra-nested component
+
+4. REMOTE CLIENT LOG:
+   [FEB 11 '25 07:15:42.829 EST] ._REMOTE[192.168.0.4].COMPONENTNAME ℹ️ Log message from remote client { bar: true }
+
+NOTES
+
+- TIMESTAMP:
+    Years between 2000 and 2099 are displayed in two-digit format (prefixed with an apostrophe, e.g., '25),
+    while other years use the full year.
+
+- COMPONENT:
+    This part is optional. If absent, the log line starts with the timestamp followed immediately by the message.
+
+- LEVEL PREFIX:
+    For "debug", "WARN", and "ERROR" levels, a fixed-case label is included before the message text.
+    For the "log" level, no label is output (though the default emoji is still prepended).
+
+- EMOJI:
+    If a custom emoji is provided at the start of the message, it is used in place of the default emoji.
+
+- OBJECTS:
+    Multiple objects may be appended to the log message, separated by a single space.
+
+END OF SPECIFICATION
+  */

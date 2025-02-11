@@ -1,4 +1,4 @@
-import { slog, serror, sdebug, swarn } from '../../../shared/slogging.js';
+import { slog, serror, sdebug, swarn } from '../../../shared/slogger.js';
 // RemoteAvatarManager.js
 import { EventEmitter } from "events";
 

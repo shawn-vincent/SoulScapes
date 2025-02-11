@@ -3,13 +3,15 @@
  * slog - Command Line Interface for slogging (slogger)
  *
  * Usage:
- *   slog {debug|log|warn|error|<optional>} msg arg...
+ *   slog {debug|log|warn|error|<optional>} [.component] msg [args...]
+ *   slog {debug|log|warn|error|<optional>} [.a.b.c] msg [args...]
  *
  * Examples:
  *   slog debug "User ${user} logged in" '{"user": "alice"}'
+ *   slog debug .auth "User ${user} logged in" '{"user": "alice"}'
  *   slog "A simple log message"
  *
- * This script uses the slogging module and supports a configuration file (.slogger)
+ * This script uses the slogger module and supports a configuration file (.slogger)
  * in either:
  *   1. The current working directory (for project-specific configuration), or
  *   2. The directory where the slog file resides (as a default configuration).
@@ -20,8 +22,8 @@
  * (for both file/socket and console) is overridden to "warn".
  */
 
-import pkg from './shared/slogging.js'; // Adjust the relative path as needed.
-const { sdebug, slog, swarn, serror, slogConfig } = pkg;
+import pkg from './shared/slogger.js'; // Adjust the relative path as needed.
+const { sdebug, slog, swarn, serror, csdebug, cslog, cswarn, cerror, slogConfig } = pkg;
 
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
@@ -48,48 +50,82 @@ if (existsSync(configPath)) {
     // Optionally, exit if configuration is critical:
     // process.exit(1);
   }
+} else {
+    slogConfig({
+	"slog": "debug",
+	"slog.slogger": "warn"
+    });
 }
 
 // --- Override the "slogger" component logging to "warn" ---
-slogConfig({
-  "logLevel.slogger": "warn",
-  "console.slogger": "warn"
-});
+//slogConfig({
+//  "slog.slogger": "warn",
+//});
 
 // --- Process command-line arguments ---
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
-  console.error('Usage: slog {debug|log|warn|error|<optional>} message [args...]');
+  console.error('Usage: slog {debug|log|warn|error|<optional>} [.component] msg [args...]');
   process.exit(1);
 }
 
 // Determine if the first argument is a recognized log level.
 const possibleLevel = args[0].toLowerCase();
-let level, messageArgs;
+let level, remainingArgs;
 if (['debug', 'log', 'warn', 'error'].includes(possibleLevel)) {
   level = possibleLevel;
-  messageArgs = args.slice(1);
+  remainingArgs = args.slice(1);
 } else {
   // Default to "log" if no recognized level is provided.
   level = 'log';
-  messageArgs = args;
+  remainingArgs = args;
 }
 
-const message = messageArgs.join(' ');
+let component = null;
+// If the first remaining argument starts with a dot, treat it as a component spec.
+if (remainingArgs.length > 0 && remainingArgs[0].startsWith('.')) {
+  component = remainingArgs[0].substring(1); // remove the leading dot
+  remainingArgs = remainingArgs.slice(1);
+}
 
-// Dispatch the log message to the appropriate slogging function.
-switch (level) {
-  case 'debug':
-    sdebug(message);
-    break;
-  case 'warn':
-    swarn(message);
-    break;
-  case 'error':
-    serror(message);
-    break;
-  default:
-    slog(message);
-    break;
+if (remainingArgs.length === 0) {
+  console.error('Error: Missing log message.');
+  process.exit(1);
+}
+
+// Combine the remaining arguments into the log message.
+const message = remainingArgs.join(' ');
+
+// Dispatch the log message to the appropriate slogger function.
+if (component) {
+  switch (level) {
+    case 'debug':
+      csdebug(component, message);
+      break;
+    case 'warn':
+      cswarn(component, message);
+      break;
+    case 'error':
+      cerror(component, message);
+      break;
+    default:
+      cslog(component, message);
+      break;
+  }
+} else {
+  switch (level) {
+    case 'debug':
+      sdebug(message);
+      break;
+    case 'warn':
+      swarn(message);
+      break;
+    case 'error':
+      serror(message);
+      break;
+    default:
+      slog(message);
+      break;
+  }
 }

@@ -11,7 +11,7 @@
  *
  * Incoming events:
  *   - safeOn(socket, eventName, handler)
- *     Wraps the handler so that any error is caught and logged via slogging (using serror()).
+ *     Wraps the handler so that any error is caught and slogged with slogger (using serror()).
  *
  * Usage Example:
  *   import { safeOn, safeEmit } from './safeSocket';
@@ -28,7 +28,7 @@
  *   }
  */
 
-import { slog, serror } from '../../../shared/slogging.js'; // Adjust the relative path as needed
+import { slog, serror } from '../../../shared/slogger.js'; // Adjust the relative path as needed
 
 /**
  * Wraps an error with additional context using the modern Error 'cause' property.
