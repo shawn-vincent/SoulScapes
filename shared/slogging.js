@@ -244,17 +244,45 @@
     }
 
     // --- Helper: Stringify log arguments ---
-    function stringify(arg) {
-        if (typeof arg === "object") {
-            try {
-                return JSON.stringify(arg);
-            } catch (e) {
-                return String(arg);
-            }
-        }
-        return String(arg);
+    /**
+     * Converts an Error object into a plain object that includes its message and stack.
+     * If the error has a 'cause' (using the modern Error cause property), it recurses.
+     *
+     * @param {Error} err - The error to convert.
+     * @returns {object} A plain object representation of the error.
+     */
+    function errorToObject(err) {
+	return {
+	    message: err.message,
+	    stack: err.stack,
+	    ...(err.cause ? { cause: errorToObject(err.cause) } : {})
+	};
     }
 
+    /**
+     * Stringifies a log argument.
+     * If the argument is an Error, it converts it to a plain object that includes the message and stack.
+     *
+     * @param {any} arg - The value to stringify.
+     * @returns {string} The stringified representation.
+     */
+    function stringify(arg) {
+	if (arg instanceof Error) {
+	    try {
+		return JSON.stringify(errorToObject(arg));
+	    } catch (e) {
+		return arg.toString();
+	    }
+	} else if (typeof arg === "object") {
+	    try {
+		return JSON.stringify(arg);
+	    } catch (e) {
+		return String(arg);
+	    }
+	}
+	return String(arg);
+    }
+    
     // --- Helper: Check whether text starts with an emoji ---
     function startsWithEmoji(text) {
         return (/^\p{Extended_Pictographic}/u).test(text);

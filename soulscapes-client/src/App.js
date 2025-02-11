@@ -1,0 +1,46 @@
+// src/App.js
+import React, { useState, useEffect } from "react";
+import Room from "./pages/Room";
+import ErrorOverlay from "./components/ErrorOverlay";
+
+function App() {
+    const [globalError, setGlobalError] = useState(null);
+
+    useEffect(() => {
+	// Catch synchronous errors (window.onerror)
+	const handleError = (message, source, lineno, colno, error) => {
+	    // Update state with the error (if available) or create a new one
+	    setGlobalError(error || new Error(message));
+	    // Return true to prevent the default browser error handler.
+	    return true;
+	};
+
+	// Catch unhandled promise rejections
+	const handleRejection = (event) => {
+	    setGlobalError(event.reason);
+	    event.preventDefault();
+	};
+
+	window.addEventListener("error", handleError);
+	window.addEventListener("unhandledrejection", handleRejection);
+
+	return () => {
+	    window.removeEventListener("error", handleError);
+	    window.removeEventListener("unhandledrejection", handleRejection);
+	};
+    }, []);
+
+    return (
+	<>
+	    {globalError && (
+		<ErrorOverlay
+		    error={globalError}
+		    onClose={() => setGlobalError(null)}
+		/>
+	    )}
+	    <Room />
+	</>
+    );
+}
+
+export default App;

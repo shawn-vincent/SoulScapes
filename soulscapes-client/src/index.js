@@ -2,7 +2,9 @@ import { slog, serror, sdebug, swarn, slogConfig } from '../../shared/slogging.j
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import App from './App';
 import Room from './pages/Room';
+import ErrorBoundary from './components/ErrorBoundary';
 
 
 slogConfig({
@@ -27,7 +29,7 @@ slogConfig({
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-    <React.StrictMode>
-	<Room />
-    </React.StrictMode>
+    <ErrorBoundary>
+	<App/>
+    </ErrorBoundary>
 );

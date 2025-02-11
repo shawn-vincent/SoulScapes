@@ -120,7 +120,6 @@ const Room = () => {
     <div className={styles.room}>
       {/* Title Bar */}
 	<div className={styles.titleBar}>
-	    FOOD
         <button
           className={styles.hamburger}
           onClick={toggleMenu}
