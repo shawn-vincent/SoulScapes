@@ -1,3 +1,4 @@
+import { slog, serror, sdebug, swarn } from '../../../shared/slogging.js';
 import React, { useRef, useState, useLayoutEffect, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import styles from './ScrollLayout.module.css';

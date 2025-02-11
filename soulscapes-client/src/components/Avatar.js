@@ -1,3 +1,4 @@
+import { slog, serror, sdebug, swarn } from '../../../shared/slogging.js';
 import React, { useRef, useEffect, useState } from 'react';
 import AvatarConfigWindow from './AvatarConfigWindow'; // Import the new component
 import { X } from '@phosphor-icons/react'; // Import the close icon from Phosphor

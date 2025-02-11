@@ -168,8 +168,8 @@
     // --- Global configuration (modifiable via slogConfig) ---
     // The logLevel and consoleLogLevel objects map component names to a numeric threshold.
     const config = {
-        // Global (file/socket) log level: default is "log"
-        logLevel: { default: LEVELS.log },
+        // Global (file/socket) log level: default is "debug"
+        logLevel: { default: LEVELS.debug },
         // Console log level: defaults to the global level if not overridden.
         consoleLogLevel: { default: LEVELS.log },
         logFile: {
@@ -787,6 +787,68 @@
     // Call this on a Node.js Express server to create a POST endpoint that accepts log messages.
     // Incoming messages are augmented with a prefix of "[{uniqueClientId(req)}]" before logging.
     function slogExpressEndpoint(app, endpoint) {
+	// Log that we're setting up the express endpoint.
+	cslog("slogger", "Creating Slogger express endpoint", { app, endpoint });
+	
+	if (!app || typeof app.post !== "function") {
+	    throw new Error("Invalid Express app instance provided.");
+	}
+
+	app.post(endpoint, function (req, res) {
+	    cslog("slogger", "Received log payload:", req.body);
+
+	    const body = req.body;
+	    if (!body || !body.message) {
+		res.status(400).send("Invalid log message payload.");
+		return;
+	    }
+	    
+	    // Determine a unique client ID from the request.
+	    let clientId = "unknown";
+	    if (typeof config.uniqueClientId === "function") {
+		try {
+		    clientId = config.uniqueClientId(req);
+		} catch (err) {
+		    clientId = "unknown";
+		}
+	    }
+	    
+	    // Augment the incoming message with the client ID.
+	    const augmentedMessage = `[CLIENT ${clientId}] ${body.message}`;
+	    // Use the level from the body, defaulting to "log".
+	    const level = (body.level || "log").toLowerCase();
+
+	    // Determine the effective client log level.
+	    // If config.clientLogLevel is provided, use it; otherwise, default to the main log level.
+	    const clientEffectiveLevel =
+		  config.clientLogLevel
+		  ? (typeof config.clientLogLevel === "string"
+		     ? LEVELS[config.clientLogLevel.toLowerCase()]
+		     : config.clientLogLevel)
+		  : config.logLevel.default;
+	    
+	    // Only process the log if the incoming level is greater than or equal to the client threshold.
+	    if (LEVELS[level] < clientEffectiveLevel) {
+		res.status(200).send("Log level below client threshold; not logged.");
+		return;
+	    }
+	    
+	    // Dispatch to the appropriate slogger function.
+	    if (level === "debug") {
+		sdebug(augmentedMessage);
+	    } else if (level === "warn") {
+		swarn(augmentedMessage);
+	    } else if (level === "error") {
+		serror(augmentedMessage);
+	    } else {
+		slog(augmentedMessage);
+	    }
+	    
+	    res.status(200).send("Logged");
+	});
+    }
+    
+    function slogExpressEndpointx(app, endpoint) {
         csdebug("slogger", "Creating Slogger express endpoint", { app: app, endpoint: endpoint });
         if (!app || typeof app.post !== "function") {
             throw new Error("Invalid Express app instance provided.");

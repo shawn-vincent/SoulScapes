@@ -93,9 +93,6 @@ const Room = () => {
         <ScrollLayout top={false} bottom={false}>
           <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
             <Avatar data={{ ...localAvatarManager.getAvatarData(), connectionStatus }} />
-            <Avatar key="1" data={{initials: "1", color: "#00f", size: 80}} />
-            <Avatar key="2" data={{initials: "2", color: "#00f", size: 80}} />
-            <Avatar key="3" data={{initials: "3", color: "#00f", size: 80}} />
           </AvatarHorizontalGridLayout>
         </ScrollLayout>
       </div>
@@ -122,7 +119,8 @@ const Room = () => {
   return (
     <div className={styles.room}>
       {/* Title Bar */}
-      <div className={styles.titleBar}>
+	<div className={styles.titleBar}>
+	    FOOD
         <button
           className={styles.hamburger}
           onClick={toggleMenu}

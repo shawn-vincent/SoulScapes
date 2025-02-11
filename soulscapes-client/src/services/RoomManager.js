@@ -1,3 +1,4 @@
+import { slog, serror, sdebug, swarn } from '../../../shared/slogging.js';
 import { io } from "socket.io-client";
 import localAvatarManager from "./LocalAvatarManager";
 import remoteAvatarManager from "./RemoteAvatarManager";
