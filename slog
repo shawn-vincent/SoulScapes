@@ -129,3 +129,7 @@ if (component) {
       break;
   }
 }
+
+/* Local Variables: */
+/* mode: js */
+/* End: */

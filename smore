@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# smore - a small wrapper script to enter soulscapes-server and run the JS smore tool.
+
+# Change to the soulscape-server directory
+cd ./soulscapes-server || {
+  echo "Error: Could not cd into ./soulscapes-server."
+  exit 1
+}
+
+# Run 'smore' from within soulscapes-server, forwarding all command-line arguments
+./smore.cjs "$@"
