@@ -1,12 +1,624 @@
-#!/usr/bin/env bash
+#!/usr/bin/env node
+/*
+  smore.cjs — a "less"-like pager for large log files (no stdin).
+  
+  Features:
+   - Up/Down arrows: move highlight line-by-line (markers are selectable)
+   - PgUp/PgDn: page up/down
+   - Home: jump to top marker
+   - End: jump to bottom marker
+   - Left/Right: horizontal scroll (applies only to file lines)
+   - 'q' / Esc / Ctrl-C: quit
+   - Synthetic markers for top and bottom of file
+   - Auto-refresh if file grows and you're at the bottom
+  
+  New in this version:
+   - The <TOP> and <BOTTOM> markers are centered on screen (ignoring horizontal scroll)
+   - When a marker is highlighted, the inverse (highlight) formatting covers the entire line.
+   - The reachedEOF flag is now updated whenever the file grows so that the bottom marker only shows when you are truly at the end.
+*/
 
-# smore - a small wrapper script to enter soulscapes-server and run the JS smore tool.
+const path = require('path');
+// Add the soulscapes-server/node_modules directory to the module resolution paths.
+const additionalModulesPath = path.resolve(__dirname, 'soulscapes-server', 'node_modules');
+module.paths.push(additionalModulesPath);
 
-# Change to the soulscape-server directory
-cd ./soulscapes-server || {
-  echo "Error: Could not cd into ./soulscapes-server."
-  exit 1
+const fs = require('fs');
+const blessed = require('blessed');
+const stringWidth = require('string-width').default;
+const { sdebug, serror, slog, swarn, slogConfig, slogParseLine } = require('./shared/slogger.js');
+
+// Configure logging for smore itself.
+slogConfig({
+  slog: {
+    type: "file",
+    path: "logs/smore.log"
+  }
+});
+sdebug("smore starting (yum 😋)...");
+
+if (process.argv.length < 3) {
+  console.error('Usage: smore <filename>');
+  process.exit(1);
 }
 
-# Run 'smore' from within soulscapes-server, forwarding all command-line arguments
-./smore.cjs "$@"
+const filePath = process.argv[2];
+
+// How many lines to keep in memory at most.
+const MAX_LINE_BUFFER = 10000;
+// How many bytes to read in one chunk.
+const READ_CHUNK_SIZE = 65536; // 64 KB
+
+// ----------------------------------------------------------------------------
+// Global Data Structures
+// ----------------------------------------------------------------------------
+
+/**
+ * linesInBuffer:
+ *   Array of objects: { text, start, end }
+ *
+ * highlightIndex: a virtual index indicating the currently highlighted row.
+ *   It now ranges from:
+ *      -1         → top marker row,
+ *      0 … n-1   → file lines,
+ *      n         → bottom marker.
+ *
+ * topIndex: index in linesInBuffer that appears at the top of the screen.
+ * scrollLeft: horizontal offset for viewing long lines.
+ * fileSize: tracks the file size on last check.
+ */
+let linesInBuffer = [];
+// Virtual highlight index: -1 = top marker, 0...n-1 = file lines, n = bottom marker.
+let highlightIndex = 0;
+let topIndex = 0;
+let scrollLeft = 0;
+let fileSize = 0;
+// reachedEOF is true only if the last forward-read hit the current file size.
+let reachedEOF = false;
+
+// ----------------------------------------------------------------------------
+// File Reading Helpers (with trailing empty line fix in readBackward)
+// ----------------------------------------------------------------------------
+
+let fd = null;
+
+async function openFile() {
+  fd = await fs.promises.open(filePath, 'r');
+  const stats = await fd.stat();
+  fileSize = stats.size;
+}
+
+/**
+ * readForward(startOffset, minLines)
+ *
+ * Reads forward from startOffset using StringDecoder so that multi-byte characters
+ * aren’t split. Returns an array of objects { text, start, end }.
+ */
+async function readForward(startOffset, minLines) {
+  const { StringDecoder } = require("string_decoder");
+  const decoder = new StringDecoder("utf8");
+
+  slog("[readForward]", `Starting at offset=${startOffset}, minLines=${minLines}, fileSize=${fileSize}`);
+  let results = [];
+  let offset = startOffset;
+  let bytesRead;
+  let textBuffer = "";
+
+  while (results.length < minLines && offset < fileSize) {
+    const toRead = Math.min(READ_CHUNK_SIZE, fileSize - offset);
+    slog("[readForward]", `Reading chunk of size=${toRead} at offset=${offset}`);
+
+    const buffer = Buffer.alloc(toRead);
+    ({ bytesRead } = await fd.read(buffer, 0, toRead, offset));
+    if (bytesRead <= 0) {
+      slog("[readForward]", "bytesRead <= 0, breaking");
+      break;
+    }
+
+    let chunkStr = decoder.write(buffer.slice(0, bytesRead));
+    chunkStr = textBuffer + chunkStr;
+    textBuffer = "";
+
+    let startIdx = 0;
+    let idx;
+    while ((idx = chunkStr.indexOf("\n", startIdx)) !== -1) {
+      let lineText = chunkStr.substring(startIdx, idx);
+      slog("[readForward]", "COMPLETE LINE:", JSON.stringify(lineText));
+      results.push({ text: lineText, start: null, end: null });
+      startIdx = idx + 1;
+    }
+    if (startIdx < chunkStr.length) {
+      textBuffer = chunkStr.substring(startIdx);
+      slog("[readForward]", `Leftover text length=${textBuffer.length}`);
+    }
+    offset += bytesRead;
+  }
+
+  let remaining = decoder.end();
+  if (remaining) {
+    textBuffer += remaining;
+  }
+  if (textBuffer.length > 0) {
+    if (results.length > 0) {
+      slog("[readForward]", "Merging leftover with last line:", JSON.stringify(textBuffer));
+      results[results.length - 1].text += textBuffer;
+    } else {
+      slog("[readForward]", "Creating leftover line:", JSON.stringify(textBuffer));
+      results.push({ text: textBuffer, start: null, end: null });
+    }
+    textBuffer = "";
+  }
+  if (offset >= fileSize) {
+    reachedEOF = true;
+    slog("[readForward]", "Reached EOF");
+  }
+  slog("[readForward]", `Returning ${results.length} lines, final offset=${offset}`);
+  return results;
+}
+
+/**
+ * readBackward(endOffset, minLines)
+ *
+ * Reads backward from endOffset. (Mostly unchanged, except we drop a trailing empty line.)
+ */
+async function readBackward(endOffset, minLines) {
+  let results = [];
+  let offset = endOffset;
+  let leftover = '';
+  while (results.length < minLines && offset > 0) {
+    const toRead = Math.min(READ_CHUNK_SIZE, offset);
+    const readStart = offset - toRead;
+    const buffer = Buffer.alloc(toRead);
+    const { bytesRead } = await fd.read(buffer, 0, toRead, readStart);
+    if (bytesRead <= 0) break;
+
+    const chunkStr = buffer.slice(0, bytesRead).toString('utf8') + leftover;
+    leftover = '';
+
+    let lines = [];
+    let lastPos = chunkStr.length;
+    let idx;
+    while ((idx = chunkStr.lastIndexOf('\n', lastPos - 1)) !== -1) {
+      const lineText = chunkStr.substring(idx + 1, lastPos);
+      lines.push({ text: lineText, start: null, end: null });
+      lastPos = idx;
+    }
+    if (lastPos > 0) {
+      leftover = chunkStr.substring(0, lastPos);
+    }
+    lines.reverse();
+    results = [...lines, ...results];
+    offset = readStart;
+  }
+  if (offset === 0 && leftover.length > 0) {
+    results = [{ text: leftover, start: 0, end: null }].concat(results);
+    leftover = '';
+  }
+  // Remove a trailing empty line (if any) to match forward-reading behavior.
+  if (results.length && results[results.length - 1].text === '') {
+    results.pop();
+  }
+  return results;
+}
+
+/**
+ * fillBufferForward(minLinesNeeded)
+ */
+async function fillBufferForward(minLinesNeeded = 100) {
+  if (!linesInBuffer.length) {
+    let newLines = await readForward(0, minLinesNeeded);
+    linesInBuffer.push(...newLines);
+    pruneBuffer();
+    return;
+  }
+  if (!reachedEOF) {
+    let newLines = await readForward(fileSize, minLinesNeeded);
+    linesInBuffer.push(...newLines);
+    pruneBuffer();
+  }
+}
+
+/**
+ * fillBufferBackward(minLinesNeeded)
+ */
+async function fillBufferBackward(minLinesNeeded = 100) {
+  if (!linesInBuffer.length) {
+    const stats = await fd.stat();
+    fileSize = stats.size;
+    let newLines = await readBackward(fileSize, minLinesNeeded);
+    linesInBuffer.push(...newLines);
+    pruneBuffer();
+    return;
+  }
+  const firstLine = linesInBuffer[0];
+  if (firstLine.start !== 0 && firstLine.start !== null) {
+    let newLines = await readBackward(firstLine.start, minLinesNeeded);
+    linesInBuffer.unshift(...newLines);
+    pruneBuffer();
+  }
+}
+
+/**
+ * pruneBuffer()
+ */
+function pruneBuffer() {
+  if (linesInBuffer.length <= MAX_LINE_BUFFER) return;
+  let half = Math.floor(linesInBuffer.length / 2);
+  if (highlightIndex >= half) {
+    let removeCount = linesInBuffer.length - MAX_LINE_BUFFER;
+    linesInBuffer.splice(0, removeCount);
+    highlightIndex -= removeCount;
+    topIndex -= removeCount;
+    if (topIndex < 0) topIndex = 0;
+    if (highlightIndex < -1) highlightIndex = -1;
+  } else {
+    let removeCount = linesInBuffer.length - MAX_LINE_BUFFER;
+    linesInBuffer.splice(linesInBuffer.length - removeCount, removeCount);
+  }
+}
+
+/**
+ * ensureLineInBuffer(i)
+ */
+async function ensureLineInBuffer(i) {
+  if (i < 0) return;
+  while (i >= linesInBuffer.length && !reachedEOF) {
+    let prevLen = linesInBuffer.length;
+    await fillBufferForward();
+    if (linesInBuffer.length === prevLen) break;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Blessed UI Setup
+// ----------------------------------------------------------------------------
+
+const screen = blessed.screen({
+  smartCSR: false,
+  fullUnicode: true,
+  title: 'smore'
+});
+
+const box = blessed.box({
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+  tags: true,
+  wrap: false,
+  noOverflow: true,
+  style: { fg: 'white', bg: 'black' }
+});
+screen.append(box);
+
+// ----------------------------------------------------------------------------
+// Marker Helper Functions
+// ----------------------------------------------------------------------------
+
+function topMarkerVisible() {
+  return topIndex === 0 && linesInBuffer.length > 0;
+}
+
+// The bottom marker should be drawn only if reachedEOF is true.
+function bottomMarkerVisible() {
+  if (!reachedEOF) return false;
+  const markerCount = topMarkerVisible() ? 1 : 0;
+  const availableBuffered = linesInBuffer.length - topIndex;
+  return availableBuffered < (box.height - markerCount);
+}
+
+/**
+ * buildMarkerText(type, width)
+ *
+ * Returns a string of length 'width' that contains the centered marker text.
+ * The plain marker text (without markup) is centered, then wrapped in bold cyan.
+ * (Markers ignore horizontal scrolling.)
+ */
+function buildMarkerText(type, width) {
+  const plainText = type === 'top' ? "<<< TOP OF FILE >>>" : "<<< BOTTOM OF FILE >>>";
+  const visibleLength = stringWidth(plainText);
+  const leftPad = Math.floor((width - visibleLength) / 2);
+  const rightPad = width - leftPad - visibleLength;
+  const styled = '{bold}{cyan-fg}' + plainText + '{/cyan-fg}{/bold}';
+  return ' '.repeat(leftPad) + styled + ' '.repeat(rightPad);
+}
+
+// ----------------------------------------------------------------------------
+// Render Logic with Marker Anchoring for EOF
+// ----------------------------------------------------------------------------
+
+/**
+ * escapeForBlessed(str)
+ * Escapes any { or } characters so that Blessed markup isn’t accidentally triggered.
+ */
+function escapeForBlessed(str) {
+  return str.replace(/{/g, '\\{').replace(/}/g, '\\}');
+}
+
+async function render() {
+  // --- Update file state based on current stat ---
+  const oldSize = fileSize;
+  const stats = await fd.stat();
+  if (stats.size < oldSize) {
+    // File was truncated.
+    linesInBuffer = [];
+    highlightIndex = 0;
+    topIndex = 0;
+    reachedEOF = false;
+  } else if (stats.size > oldSize) {
+    // File has grown—so we are no longer at the end.
+    reachedEOF = false;
+  }
+  fileSize = stats.size;
+  const pageHeight = box.height;
+  const maxWidth = screen.width;
+
+  // Fill buffer if needed.
+  if (!reachedEOF && linesInBuffer.length &&
+      (linesInBuffer.length - 1 - (highlightIndex < 0 ? 0 : highlightIndex) < pageHeight)) {
+    await fillBufferForward();
+  }
+
+  let renderedRows = [];
+
+  // (1) Insert top marker if applicable.
+  if (topMarkerVisible()) {
+    renderedRows.push({
+      type: 'marker',
+      marker: 'top',
+      text: buildMarkerText('top', maxWidth)
+    });
+  }
+  const markerCount = topMarkerVisible() ? 1 : 0;
+
+  // (2) Determine desired file-line count.
+  // If at EOF, we want exactly (pageHeight - markerCount - 1) file lines so that the bottom marker lands on the last row.
+  // Otherwise, show as many file lines as will fit.
+  let desiredFileLines = reachedEOF ? (pageHeight - markerCount - 1) : (pageHeight - markerCount);
+  const availableBuffered = linesInBuffer.length - topIndex;
+  let topPadding = 0;
+  if (reachedEOF && availableBuffered < desiredFileLines) {
+    topPadding = desiredFileLines - availableBuffered;
+  }
+  // Insert top padding (after the top marker, if any).
+  for (let i = 0; i < topPadding; i++) {
+    renderedRows.push({ type: 'padding', text: '' });
+  }
+  
+  // (3) Append file lines.
+  let fileLinesToShow = Math.min(availableBuffered, desiredFileLines);
+  for (let i = 0; i < fileLinesToShow; i++) {
+    const bufferIndex = topIndex + i;
+    let line = linesInBuffer[bufferIndex].text || "";
+    // For file lines, apply horizontal scrolling.
+    if (scrollLeft < line.length) {
+      line = line.substring(scrollLeft);
+    } else {
+      line = "";
+    }
+    line = escapeForBlessed(line);
+    let currentWidth = stringWidth(line);
+    if (currentWidth < maxWidth) {
+      line = line + '.'.repeat(maxWidth - currentWidth);
+    } else if (currentWidth > maxWidth) {
+      let trimmed = "";
+      let widthCount = 0;
+      for (const ch of line) {
+        const chWidth = stringWidth(ch);
+        if (widthCount + chWidth > maxWidth) break;
+        trimmed += ch;
+        widthCount += chWidth;
+      }
+      line = trimmed;
+    }
+    renderedRows.push({ type: 'line', fileIndex: bufferIndex, text: line });
+  }
+
+  // (4) If at EOF, append bottom marker.
+  if (reachedEOF) {
+    renderedRows.push({
+      type: 'marker',
+      marker: 'bottom',
+      text: buildMarkerText('bottom', maxWidth)
+    });
+  } else {
+    // If not at EOF, pad the bottom so the screen is full.
+    while (renderedRows.length < pageHeight) {
+      renderedRows.push({ type: 'padding', text: '' });
+    }
+  }
+
+  // (5) Compute which rendered row should be highlighted.
+  let highlightRow = null;
+  if (highlightIndex === -1 && topMarkerVisible()) {
+    highlightRow = 0;
+  } else if (highlightIndex >= 0 && highlightIndex < linesInBuffer.length) {
+    const offset = topMarkerVisible() ? 1 : 0;
+    highlightRow = offset + topPadding + (highlightIndex - topIndex);
+    if (highlightRow < 0) highlightRow = 0;
+    if (highlightRow >= renderedRows.length) highlightRow = renderedRows.length - 1;
+  } else if (highlightIndex === linesInBuffer.length) {
+    // Bottom marker should be the last row.
+    highlightRow = renderedRows.length - 1;
+  }
+  // Apply inverse formatting to the highlighted row.
+  for (let i = 0; i < renderedRows.length; i++) {
+    if (i === highlightRow) {
+      renderedRows[i].text = '{inverse}' + renderedRows[i].text + '{/inverse}';
+    }
+  }
+
+  // Force a full redraw.
+  screen.realloc();
+  screen.program.clear();
+  box.setContent(renderedRows.map(r => r.text).join('\n'));
+  screen.render();
+}
+
+// ----------------------------------------------------------------------------
+// Navigation and Key Bindings with Marker Selection
+// ----------------------------------------------------------------------------
+
+async function moveHighlight(delta) {
+  let newIndex = highlightIndex + delta;
+  // Allow the top marker (-1) if it's visible.
+  if (topMarkerVisible()) {
+    if (newIndex < -1) newIndex = -1;
+  } else {
+    if (newIndex < 0) newIndex = 0;
+  }
+  // For downward movement: if at EOF, allow the bottom marker.
+  if (reachedEOF) {
+    if (newIndex > linesInBuffer.length) newIndex = linesInBuffer.length;
+  } else {
+    if (newIndex >= linesInBuffer.length) newIndex = linesInBuffer.length - 1;
+  }
+  highlightIndex = newIndex;
+  await ensureLineInBuffer(highlightIndex < 0 ? 0 : highlightIndex);
+  adjustTopIndex();
+  await render();
+}
+
+function adjustTopIndex() {
+  const pageHeight = box.height;
+  // Special case: top marker forces topIndex to 0.
+  if (highlightIndex === -1) {
+    topIndex = 0;
+    return;
+  }
+  // Special case: when the bottom marker is selected, we want to ensure that the bottom marker
+  // is drawn on the very last row. (Our render() routine now pads above file lines when needed.)
+  if (highlightIndex === linesInBuffer.length) {
+    // No adjustment needed here.
+    return;
+  }
+  // Otherwise, ensure the highlighted file line is visible.
+  if (highlightIndex < topIndex) {
+    topIndex = highlightIndex;
+  } else {
+    const topMarkerCount = topMarkerVisible() ? 1 : 0;
+    const bottomMarkerCount = (reachedEOF && bottomMarkerVisible()) ? 1 : 0;
+    const fileLinesVisible = Math.min(
+      linesInBuffer.length - topIndex,
+      pageHeight - topMarkerCount - bottomMarkerCount
+    );
+    if (highlightIndex >= topIndex + fileLinesVisible) {
+      topIndex = highlightIndex - fileLinesVisible + 1;
+    }
+  }
+}
+
+// Up arrow
+screen.key(['up'], async () => {
+  if (highlightIndex === (topMarkerVisible() ? -1 : 0)) {
+    await fillBufferBackward();
+  }
+  await moveHighlight(-1);
+});
+
+// Down arrow
+screen.key(['down'], async () => {
+  await moveHighlight(1);
+});
+
+// Page Up
+screen.key(['pageup'], async () => {
+  const pageHeight = box.height;
+  await moveHighlight(-pageHeight);
+});
+
+// Page Down
+screen.key(['pagedown'], async () => {
+  const pageHeight = box.height;
+  await moveHighlight(pageHeight);
+});
+
+// Home: jump to the top marker.
+screen.key(['home'], async () => {
+  linesInBuffer = [];
+  highlightIndex = -1; // top marker
+  topIndex = 0;
+  reachedEOF = false;
+  await fillBufferForward(box.height);
+  await render();
+});
+
+// End: jump to the bottom marker.
+// When [END] is pressed, we mark EOF as reached, fill a larger portion from the bottom,
+// and set the virtual highlight index to the bottom marker.
+screen.key(['end'], async () => {
+  linesInBuffer = [];
+  topIndex = 0;
+  const stats = await fd.stat();
+  fileSize = stats.size;
+  reachedEOF = true;
+  await fillBufferBackward(box.height * 2);
+  highlightIndex = linesInBuffer.length; // bottom marker index
+  adjustTopIndex();
+  await render();
+});
+
+// Left arrow: horizontal scroll left (applies only to file lines)
+screen.key(['left'], async () => {
+  scrollLeft = Math.max(0, scrollLeft - 5);
+  await render();
+});
+
+// Right arrow: horizontal scroll right (applies only to file lines)
+screen.key(['right'], async () => {
+  scrollLeft += 5;
+  await render();
+});
+
+// Quit on Escape, q, or Ctrl-C.
+screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
+
+// On resize, re-render.
+screen.on('resize', async () => {
+  await render();
+});
+
+// ----------------------------------------------------------------------------
+// Periodic File Growth Check
+// ----------------------------------------------------------------------------
+
+setInterval(async () => {
+  const oldSize = fileSize;
+  const stats = await fd.stat();
+  if (stats.size < oldSize) {
+    // File was truncated.
+    linesInBuffer = [];
+    highlightIndex = 0;
+    topIndex = 0;
+    reachedEOF = false;
+  } else if (stats.size > oldSize) {
+    // File has grown: we are no longer at the end.
+    reachedEOF = false;
+  }
+  fileSize = stats.size;
+  if (linesInBuffer.length - 1 - (highlightIndex < 0 ? 0 : highlightIndex) < box.height) {
+    await fillBufferForward();
+    adjustTopIndex();
+    await render();
+  }
+}, 1000);
+
+// ----------------------------------------------------------------------------
+// Main Entry
+// ----------------------------------------------------------------------------
+
+(async function main() {
+  try {
+    await openFile();
+  } catch (err) {
+    console.error('Failed to open file:', err);
+    process.exit(1);
+  }
+  // Initial load from top of file.
+  await fillBufferForward(box.height);
+  await render();
+})();
+
+/* Local Variables: */
+/* mode: js */
+/* End: */
