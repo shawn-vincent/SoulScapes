@@ -1,4 +1,22 @@
 #!/usr/bin/env node
+/*
+  smore — a "less"-like pager for large log files (no stdin).
+  
+  Features:
+   - Up/Down arrows: move highlight line-by-line (markers are selectable)
+   - PgUp/PgDn: page up/down
+   - Home: jump to top marker
+   - End: jump to bottom marker
+   - Left/Right: horizontal scroll (applies only to file lines)
+   - 'q' / Esc / Ctrl-C: quit
+   - Synthetic markers for top and bottom of file
+   - Auto-refresh if file grows and you're at the bottom
+  
+  New in this version:
+   - The <TOP> and <BOTTOM> markers are centered on screen (ignoring horizontal scroll)
+   - When a marker is highlighted, the inverse (highlight) formatting covers the entire line.
+   - The reachedEOF flag is now updated whenever the file grows so that the bottom marker only shows when you are truly at the end.
+*/
 
 const fs = require('fs');
 const path = require('path');
@@ -12,13 +30,13 @@ module.paths.push(additionalModulesPath);
 
 const blessed = require('blessed');
 const stringWidth = require('string-width').default;
-const { sdebug, slogConfig } = require('./shared/slogger.js');
+const { sdebug, slogConfig, slog, slogParseLine } = require('./shared/slogger.js');
 
 // Configuration constants
 const CONFIG = {
     maxLineBuffer: 10000,
     readChunkSize: 65536, // 64KB
-    refreshInterval: 1000, // 1 second
+    refreshInterval: 100, // 0.1 second
     initialLines: 100,    // Default number of lines to load initially
     markers: {
 	top: '<<< TOP OF FILE >>>',
@@ -28,10 +46,12 @@ const CONFIG = {
 
 // Configure logging
 slogConfig({
-    slog: {
-	type: "file",
-	path: "logs/smore.log"
-    }
+    slog: [
+	"warn",
+	{
+	    type: "file",
+	    path: "logs/smore.log"
+	}]
 });
 
 class FileReader {
@@ -40,12 +60,15 @@ class FileReader {
 	this.fileHandle = null;
 	this.fileSize = 0;
 	this.reachedEOF = false;
+	this.currentOffset = 0; // Track the last read position
+
     }
 
     async open() {
 	this.fileHandle = await fs.promises.open(this.filePath, 'r');
 	const stats = await this.fileHandle.stat();
 	this.fileSize = stats.size;
+	// currentOffset remains 0 until we start reading
     }
 
     async readChunk(offset, size) {
@@ -94,6 +117,8 @@ class FileReader {
 	}
 
 	this.reachedEOF = offset >= this.fileSize;
+	this.currentOffset = offset;  // update the current offset after reading
+
 	return results;
     }
 
@@ -117,8 +142,10 @@ class FileReader {
 	    let idx;
 	    
 	    while ((idx = chunkStr.lastIndexOf('\n', lastPos - 1)) !== -1) {
-		lines.push({ text: chunkStr.substring(idx + 1, lastPos) });
-		lastPos = idx;
+		const lineStart = readStart + idx + 1;
+		lines.push({ text: chunkStr.substring(idx + 1, lastPos),
+			     start: lineStart });
+ 		lastPos = idx;
 	    }
 	    
 	    if (lastPos > 0) leftover = chunkStr.substring(0, lastPos);
@@ -161,8 +188,12 @@ class BufferManager {
 	    return;
 	}
 
-	if (!this.fileReader.reachedEOF) {
-	    const newLines = await this.fileReader.readForward(this.fileReader.fileSize, minLines);
+	if (this.fileReader.currentOffset < this.fileReader.fileSize) {
+            // Use the currentOffset, which marks the end of what
+            // we've read so far
+            const newLines =
+		  await this.fileReader.readForward (this.fileReader
+						     .currentOffset, minLines);
 	    this.lines.push(...newLines);
 	    this.pruneBuffer();
 	}
@@ -242,6 +273,83 @@ class View {
 	this.setupKeyHandlers();
     }
 
+    formatConciseDate(dateObj) {
+	const now = new Date();
+	// Normalize today's date (strip time)
+	const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const target = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+	const diffMs = today - target; // positive if target is in the past
+	const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+	// Helper to format time in 12-hour format.
+	function formatTime(date, includeSeconds) {
+	    let hours = date.getHours();
+	    const minutes = date.getMinutes();
+	    const seconds = date.getSeconds();
+	    const ampm = hours >= 12 ? 'pm' : 'am';
+	    hours = hours % 12;
+	    if (hours === 0) hours = 12;
+	    const minStr = minutes < 10 ? '0' + minutes : minutes;
+	    let timeStr = hours + ':' + minStr;
+	    if (includeSeconds) {
+		const secStr = seconds < 10 ? '0' + seconds : seconds;
+		timeStr += ':' + secStr;
+	    }
+	    timeStr += ampm;
+	    return timeStr;
+	}
+
+	// Format based on how old the timestamp is.
+	if (diffDays === 0) {
+	    // For today: include seconds
+	    return formatTime(dateObj, true);
+	} else if (diffDays > 0 && diffDays < 7) {
+	    // For up to 7 days ago: show the number of days and time (no seconds)
+	    return '-' + diffDays + 'd ' + formatTime(dateObj, false);
+	} else {
+	    // For older dates: show abbreviated month, day, and time (no seconds)
+	    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+				"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+	    return monthNames[dateObj.getMonth()] + ' ' + dateObj.getDate() + ' ' + formatTime(dateObj, false);
+	}
+    }
+
+    formatLogLine(rawText) {
+	// Parse the raw log line.
+	let parsed = slogParseLine(rawText);
+
+	// Create a concise time: try parsing the timestamp and keep only the time portion.
+	let conciseDate = parsed.timestamp;
+	const dateObj = new Date(parsed.timestamp);
+	if (!isNaN(dateObj)) {
+            // Example: "14:35:07" (24-hour format)
+            conciseDate = this.formatConciseDate(dateObj);
+	}
+	
+	// Process the component: if it starts with "_remote", replace with an emoticon and keep client ID.
+	let componentStr = '';
+	if (parsed.component) {
+            if (parsed.component.startsWith('_remote')) {
+		// Look for a pattern like _remote[CLIENT 123]
+		const match = parsed.component.match(/_remote\[(.*?)\]/);
+		if (match) {
+                    componentStr = '🌐[' + match[1] + ']';
+		} else {
+                    componentStr = '🌐';
+		}
+            } else {
+		componentStr = '.' + parsed.component;
+            }
+	}
+	
+	// You can also show the log level (if desired)
+	let levelStr = parsed.level == "log" ? "" : parsed.level+": ";
+	
+	// Reconstruct the line in your desired format.
+	// For example: "[14:35:07] 🌐[CLIENT 123] LOG: The message"
+	return `[${conciseDate}] ${componentStr} ${levelStr}${parsed.message}`.trim();
+    }
+
     setupKeyHandlers() {
 	this.screen.key(['escape', 'q', 'C-c'], () => process.exit(0));
 	this.screen.key(['up'], () => this.moveHighlight(-1));
@@ -291,19 +399,21 @@ class View {
             this.buffer.topIndex + availableHeight
         );
 
-        for (const line of visibleLines) {
-            let text = line.text || '';
-            if (this.scrollLeft < text.length) {
-                text = text.substring(this.scrollLeft);
-            } else {
-                text = '';
-            }
-            
-            // Ensure text fills the width to prevent bleeding
-            text = (text + ' '.repeat(width)).substring(0, width);
-            text = this.escapeForBlessed(text);
-            rows.push({ type: 'line', text });
-        }
+         for (const line of visibleLines) {
+	     let rawText = line.text || '';
+	     // Parse and reformat the log line:
+	     let text = this.formatLogLine(rawText);
+	     
+	     // Apply horizontal scrolling and pad to the screen width
+	     if (this.scrollLeft < text.length) {
+		 text = text.substring(this.scrollLeft);
+	     } else {
+		 text = '';
+	     }
+	     text = (text + ' '.repeat(width)).substring(0, width);
+	     text = this.escapeForBlessed(text);
+	     rows.push({ type: 'line', text });
+	 }
 
         // Add bottom marker if at EOF
         if (this.buffer.canSelectBottomMarker() && rows.length < pageHeight) {
@@ -444,31 +554,41 @@ async function main() {
         // Initialize at the end of the file
         await buffer.fillBackward(view.box.height * 2);
         buffer.highlightIndex = buffer.lines.length; // Select bottom marker
-        await view.adjustView();
+	fileReader.currentOffset = fileReader.fileSize;
+	await view.adjustView();
         await view.render();
 
         // Set up file growth check
         setInterval(async () => {
-            const stats = await fileReader.fileHandle.stat();
-            if (stats.size !== fileReader.fileSize) {
-                const wasAtBottom = buffer.highlightIndex === buffer.lines.length;
-                fileReader.fileSize = stats.size;
-                await buffer.fillForward();
-                
-                // If we were at bottom before, stay at bottom
-                if (wasAtBottom) {
-                    buffer.highlightIndex = buffer.lines.length;
-                    await view.adjustView();
+            try {
+                const stats = await fileReader.fileHandle.stat();
+                if (stats.size !== fileReader.fileSize) {
+                    const wasAtBottom = buffer.highlightIndex === buffer.lines.length;
+                    fileReader.fileSize = stats.size;
+                    await buffer.fillForward();
+
+                    
+                    // If we were at bottom before, stay at bottom
+                    if (wasAtBottom) {
+                        buffer.highlightIndex = buffer.lines.length;
+                        await view.adjustView();
+                    }
+
+                    
+                    // Force screen refresh
+                    await view.render();
                 }
-                
-                await view.render();
+            } catch (err) {
+                serror('Error checking file size:', err);
             }
         }, CONFIG.refreshInterval);
 
     } catch (err) {
-        console.error('Error:', err);
+        serror('Error:', err);
         process.exit(1);
     }
 }
 
 main();
+
+//slog("parsed line", slogParseLine("[Feb 11 '25 23:13:47.751 EST] ._remote[CLIENT ::1] ✅ Connected to server"));

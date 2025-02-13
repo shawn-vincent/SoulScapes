@@ -13,6 +13,7 @@
         global.slogConfig = slogger.slogConfig;
         global.slogConfigAdd = slogger.slogConfigAdd;
         global.slogExpressEndpoint = slogger.slogExpressEndpoint;
+	global.slogParseLine = slogger.slogParseLine;
         module.exports = slogger;
     } else {
         const slogger = factory();
@@ -27,6 +28,7 @@
         global.cerror = slogger.cerror;
         global.slogConfig = slogger.slogConfig;
         global.slogConfigAdd = slogger.slogConfigAdd;
+	global.slogParseLine = slogger.slogParseLine;
         global.slogExpressEndpoint = slogger.slogExpressEndpoint;
     }
 })(typeof global !== "undefined" ? global : this, function () {
@@ -653,7 +655,7 @@
 		throw err; /// WRAP ??? XXX
 	    }
             // 3. Build final component
-            let finalComponent = `_remote[CLIENT ${clientId}]`;
+            let finalComponent = `_remote[${clientId}]`;
             if (parsed.component) {
                 finalComponent += "." + parsed.component;
             }
@@ -689,7 +691,7 @@
             line = line.slice(match[0].length);
         }
         // 2. leading dot-component
-        match = line.match(/^(\.[^\s]+)\s*/);
+	match = line.match(/^((?:\._remote\[[^\]]+\](?:\.[^\s.\[]+)*)|(?:\.[^\s.\[]+(?:\.[^\s.\[]+)*))\s*/);
         if (match) {
             result.component = match[1].slice(1);
             line = line.slice(match[0].length);
@@ -707,9 +709,9 @@
         return result;
     }
 
-    // -------------------------------------------------------------------------
+    // --------------------------------------------------------
     // Return 
-    // -------------------------------------------------------------------------
+    // --------------------------------------------------------
     return {
         sdebug,
         slog,
@@ -721,6 +723,7 @@
         cerror,
         slogConfig,
         slogConfigAdd,
-        slogExpressEndpoint
+        slogExpressEndpoint,
+	slogParseLine
     };
 });
