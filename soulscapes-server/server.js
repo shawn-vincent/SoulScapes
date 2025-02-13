@@ -145,7 +145,7 @@ roomsNamespace.on("connection", safeSocketHandler("connection", (socket) => {
 
     slog(`🌍 User connected: ${socket.id}`);
 
-    if (true) throw new Error("TEST ERROR");
+    //if (true) throw new Error("TEST ERROR");
 
     socket.safeOn("join-room", ({ room, avatarData }) => {
 	socket.join(room);
