@@ -121,18 +121,18 @@ const rooms = {}; // Tracks users and their avatars
 const roomsNamespace = io.of("/rooms");
 
 slogConfig({
-    slog: ["debug", // slog to console
-	   { // slog to file
-	       type:"file",
-	       level:"debug",
-	       path: "../logs/server-soulscapes.log",
-	   }],
-    "slog._remote": ["debug", // slog to console
-		     { // slog to file
-			 type:"file",
-			 level:"debug",
-			 path: "../logs/clientRemote-soulscapes.log",
-		     }],
+    // write server logs to file
+    slog: [{
+	type:"file",
+	level:"debug",
+	path: "../logs/server-soulscapes.log",
+    }],
+    // write client logs to a different file.
+    "slog._remote": [{
+	type:"file",
+	level:"debug",
+	path: "../logs/clientRemote-soulscapes.log",
+    }],
 });
 
 slog("Set up slog config");

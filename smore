@@ -661,6 +661,7 @@ async function main() {
 		    fileReader.hasTopMarker = false;
 		    fileReader.hasBottomMarker = false;
 		    await buffer.fillForward(view.contentBox.height);
+		    view.screen.realloc();
 		    await view.render();
 		} else if (stats.size > fileReader.fileSize) {
 		    // File extension (growth)
@@ -684,6 +685,7 @@ async function main() {
 		    }
 		    fileReader.currentOffset = stats.size;
 		}
+		view.screen.realloc();
 		await view.render();
 	    } catch (err) {
 		slog('Error checking file size:', err);
