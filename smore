@@ -1,25 +1,11 @@
 #!/usr/bin/env node
 /**
- * Robust smore with Command Line, Highlighted Log Context, and Copy Screen Feature
- * 
- * A log file viewer for append-only log files (with possible truncation/rotation).
- * 
- * Features:
- *  - Displays every file line exactly once (each line carries an absolute offset).
- *  - Inserts a top marker at the beginning and a bottom marker when at EOF.
- *  - Renders a full screen of file lines (with horizontal scrolling and arrow indicators)
- *    in the content area (all but the bottom line).
- *  - Reserves the bottommost line as a command line:
- *      - When inactive, it shows a help message (including the filename and supported keys).
- *      - When activated (via "/" key), it accepts a command.
- *        Upon [enter] the executeCommand function is called with the typed command and
- *        a parsed version of the currently highlighted log line.
- *  - Supports navigation (up/down/pageup/pagedown/home/end/left/right).
- *  - Auto-refreshes when the file is appended to, or if it’s truncated/rotated.
- *  - Module resolution magic is re‑added.
- *  - Log line formatting is robust (omitting missing parts) with padded hours.
- *  - I/O errors are wrapped with contextual info and then propagate.
- *  - **New:** Pressing uppercase "C" copies the current screen contents to the system clipboard.
+ * smore – A robust log viewer with synthetic top and bottom markers created by the FileReader.
+ *
+ * In this version the FileReader is responsible for detecting when it has reached the
+ * physical beginning and end of the file. When the entire file is read (small file), it
+ * injects synthetic markers for both the beginning (top) and the end (bottom). The
+ * BufferManager and View then simply treat these as normal lines.
  */
 
 const fs = require('fs');
@@ -33,16 +19,16 @@ const sliceAnsiModule = require('slice-ansi');
 const sliceAnsi = sliceAnsiModule.default || sliceAnsiModule;
 const blessed = require('blessed');
 const stringWidth = require('string-width').default;
-const clipboardyModule = require('clipboardy');  // For copying to the clipboard
+const clipboardyModule = require('clipboardy');
 const clipboardy = clipboardyModule.default || clipboardyModule;
 const { sdebug, slog, slogConfig, slogParseLine } = require('./shared/slogger.js');
 
 // --- Configuration Constants ---
 const CONFIG = {
     maxLineBuffer: 10000,
-    readChunkSize: 65536, // 64KB
-    refreshInterval: 100, // every 100ms
-    initialLines: 100,    // number of lines to load per operation
+    readChunkSize: 65536,
+    refreshInterval: 100,
+    initialLines: 100,
     markers: {
         top: '<<< TOP OF FILE >>>',
         bottom: '<<< BOTTOM OF FILE >>>'
@@ -84,15 +70,18 @@ class Mutex {
 }
 
 // ======================================================================
-// 1. FileReader: Handles I/O with robust error wrapping.
-//    Returns line objects { text, offset }.
+// 1. FileReader: Handles physical file I/O.
+// Each returned line is an object: { text, offset, byteLength }.
+// When the read reaches the physical boundary, synthetic markers are injected.
 // ======================================================================
 class FileReader {
     constructor(filePath) {
         this.filePath = filePath;
         this.fileHandle = null;
         this.fileSize = 0;
-        this.currentOffset = 0; // pointer for forward reading
+        this.currentOffset = 0;
+        this.hasTopMarker = false;
+        this.hasBottomMarker = false;
     }
 
     async open() {
@@ -101,6 +90,8 @@ class FileReader {
             const stats = await this.fileHandle.stat();
             this.fileSize = stats.size;
             this.currentOffset = 0;
+            this.hasTopMarker = false;
+            this.hasBottomMarker = false;
         } catch (err) {
             throw new Error(`Error opening file "${this.filePath}"`, { cause: err });
         }
@@ -117,95 +108,180 @@ class FileReader {
     }
 
     async readForward(minLines) {
+        sdebug("readForward", minLines);
         const { StringDecoder } = require('string_decoder');
         const decoder = new StringDecoder('utf8');
         let lines = [];
         let offset = this.currentOffset;
         let leftover = '';
+
         try {
+            // Add top marker if not already present and reading from the beginning
+            if (!this.hasTopMarker && offset === 0) {
+                lines.push(this.createTopMarker());
+                this.hasTopMarker = true;
+            }
+
             while (lines.length < minLines && offset < this.fileSize) {
                 const toRead = Math.min(CONFIG.readChunkSize, this.fileSize - offset);
                 const { buffer, bytesRead } = await this.readChunk(offset, toRead);
                 if (bytesRead <= 0) break;
+
                 let chunkStr = leftover + decoder.write(buffer);
                 leftover = '';
                 let startIdx = 0, idx;
+
                 while ((idx = chunkStr.indexOf('\n', startIdx)) !== -1) {
-                    lines.push({ text: chunkStr.substring(startIdx, idx), offset: offset + startIdx });
+                    const lineText = chunkStr.substring(startIdx, idx);
+                    const byteLen = Buffer.byteLength(lineText, 'utf8') + 1; // +1 for the newline character
+                    lines.push({ text: lineText, offset: offset + startIdx, byteLength: byteLen });
                     startIdx = idx + 1;
                 }
+
                 leftover = (startIdx < chunkStr.length) ? chunkStr.substring(startIdx) : '';
                 offset += bytesRead;
             }
-            const remaining = decoder.end();
-            if (remaining) leftover += remaining;
+
             if (leftover.length > 0) {
-                lines.push({ text: leftover, offset: offset - leftover.length });
+                const byteLen = Buffer.byteLength(leftover, 'utf8');
+                lines.push({ text: leftover, offset: offset - leftover.length, byteLength: byteLen });
             }
+
             this.currentOffset = offset;
+
+            // Add bottom marker if at the end of the file and not already present
+            if (this.currentOffset >= this.fileSize && !this.hasBottomMarker) {
+                lines.push(this.createBottomMarker());
+                this.hasBottomMarker = true;
+            }
+
             return lines;
         } catch (err) {
             throw new Error(`Error reading forward from offset ${this.currentOffset}`, { cause: err });
         }
     }
 
+
     async readBackward(endOffset, minLines) {
+        sdebug("readBackward", minLines);
         const { StringDecoder } = require('string_decoder');
         const decoder = new StringDecoder('utf8');
         let lines = [];
         let offset = endOffset;
         let leftover = '';
+
         try {
+            // Add bottom marker if not already present and reading from the end
+            if (!this.hasBottomMarker && endOffset >= this.fileSize) {
+                lines.unshift(this.createBottomMarker());
+                this.hasBottomMarker = true;
+                // Since we prepended, no change in offset.
+            }
+
             while (lines.length < minLines && offset > 0) {
                 const toRead = Math.min(CONFIG.readChunkSize, offset);
                 const readStart = offset - toRead;
                 const { buffer, bytesRead } = await this.readChunk(readStart, toRead);
                 if (bytesRead <= 0) break;
-                let chunkStr = decoder.write(buffer);
-                chunkStr = chunkStr + leftover;
+
+                let chunkStr = decoder.write(buffer) + leftover;
                 leftover = '';
                 let indices = [];
                 let idx = chunkStr.lastIndexOf('\n');
+
                 while (idx !== -1) {
                     indices.push(idx);
                     idx = chunkStr.lastIndexOf('\n', idx - 1);
                 }
+
                 let chunkLines = [];
                 let start = 0;
-                if (indices.length > 0) {
-                    for (let i = indices.length - 1; i >= 0; i--) {
-                        let pos = indices[i];
-                        let lineText = chunkStr.substring(start, pos);
-                        chunkLines.push({ text: lineText, offset: readStart + start });
-                        start = pos + 1;
-                    }
-                    leftover = chunkStr.substring(start);
-                } else {
-                    leftover = chunkStr;
+
+                for (let i = indices.length - 1; i >= 0; i--) {
+                    let pos = indices[i];
+                    const lineText = chunkStr.substring(start, pos);
+                    const byteLen = Buffer.byteLength(lineText, 'utf8') + 1; // +1 for the newline character
+                    chunkLines.push({ text: lineText, offset: readStart + start, byteLength: byteLen });
+                    start = pos + 1;
                 }
+
+                leftover = chunkStr.substring(start);
                 lines = chunkLines.concat(lines);
                 offset = readStart;
             }
-            if (offset === 0 && leftover.length > 0) {
-                lines.unshift({ text: leftover, offset: 0 });
+
+            if (offset === 0) {
+                if (leftover.length > 0) {
+                    const byteLen = Buffer.byteLength(leftover, 'utf8');
+                    lines.unshift({ text: leftover, offset: 0, byteLength: byteLen });
+                }
+                // Add top marker if not already present and we've reached the beginning
+                if (!this.hasTopMarker) {
+                    lines.unshift(this.createTopMarker());
+                    this.hasTopMarker = true;
+                }
             }
+
             return lines;
         } catch (err) {
             throw new Error(`Error reading backward from offset ${endOffset}`, { cause: err });
         }
     }
+
+
+    createTopMarker() {
+        return {
+            text: CONFIG.markers.top,
+            synthetic: true,
+            markerType: 'top',
+            offset: 0,
+            byteLength: Buffer.byteLength(CONFIG.markers.top, 'utf8')
+        };
+    }
+
+    createBottomMarker() {
+        return {
+            text: CONFIG.markers.bottom,
+            synthetic: true,
+            markerType: 'bottom',
+            offset: this.fileSize,
+            byteLength: Buffer.byteLength(CONFIG.markers.bottom, 'utf8')
+        };
+    }
+
+    isAtBeginning() {
+        return this.currentOffset === 0 && this.hasTopMarker;
+    }
+
+    async isAtEnd() {
+        return this.currentOffset >= this.fileSize && this.hasBottomMarker;
+    }
+
+    seekToBeginning() {
+        this.currentOffset = 0;
+        this.hasTopMarker = false;
+        this.hasBottomMarker = false;
+    }
+
+    async seekToEnd() {
+        const stats = await this.fileHandle.stat();
+        this.fileSize = stats.size;
+        this.currentOffset = this.fileSize;
+        this.hasTopMarker = false;
+        this.hasBottomMarker = false;
+    }
 }
 
+
 // ======================================================================
-// 2. BufferManager: Maintains the loaded log lines with their absolute offsets.
-//    Uses a mutex to serialize asynchronous updates.
+// 2. BufferManager: Manages the logical buffer.
+// It now simply collects lines returned from FileReader.
 // ======================================================================
 class BufferManager {
     constructor(fileReader) {
         this.fileReader = fileReader;
-        this.lines = []; // Sorted by offset (ascending)
-        this.topIndex = 0; // Index into this.lines for the top of the screen.
-        // highlightIndex: -1 = top marker; 0..(lines.length - 1) = file lines; lines.length = bottom marker.
+        this.lines = [];
+        this.topIndex = 0;
         this.highlightIndex = 0;
         this.mutex = new Mutex();
     }
@@ -215,13 +291,8 @@ class BufferManager {
         try {
             const newLines = await this.fileReader.readForward(minLines);
             if (newLines.length > 0) {
-                if (this.lines.length > 0) {
-                    const lastOffset = this.lines[this.lines.length - 1].offset;
-                    const filtered = newLines.filter(line => line.offset > lastOffset);
-                    this.lines.push(...filtered);
-                } else {
-                    this.lines.push(...newLines);
-                }
+                newLines.forEach(line => { line.synthetic = line.synthetic || false; });
+                this.lines.push(...newLines);
             }
             this.pruneBuffer();
         } finally {
@@ -232,22 +303,14 @@ class BufferManager {
     async fillBackward(minLines = CONFIG.initialLines) {
         await this.mutex.lock();
         try {
-            if (this.lines.length === 0) {
-                const stats = await this.fileReader.fileHandle.stat();
-                const newLines = await this.fileReader.readBackward(stats.size, minLines);
-                this.lines = newLines;
-                this.fileReader.currentOffset = stats.size;
-            } else {
-                const firstOffset = this.lines[0].offset;
-                if (firstOffset > 0) {
-                    const newLines = await this.fileReader.readBackward(firstOffset, minLines);
-                    if (newLines.length > 0) {
-                        const lastNew = newLines[newLines.length - 1].offset;
-                        if (lastNew < firstOffset) {
-                            this.lines = newLines.concat(this.lines);
-                        }
-                    }
-                }
+            const currentEndOffset = this.lines.length > 0 ? this.lines[0].offset : this.fileReader.fileSize;
+            const newLines = await this.fileReader.readBackward(currentEndOffset, minLines);
+            newLines.forEach(line => { line.synthetic = line.synthetic || false; });
+
+            if (newLines.length > 0) {
+                this.lines = newLines.concat(this.lines);
+                this.highlightIndex += newLines.length;
+                this.topIndex += newLines.length;
             }
             this.pruneBuffer();
         } finally {
@@ -259,62 +322,23 @@ class BufferManager {
         if (this.lines.length <= CONFIG.maxLineBuffer) return;
         const excess = this.lines.length - CONFIG.maxLineBuffer;
         if (this.highlightIndex >= Math.floor(this.lines.length / 2)) {
-            this.lines.splice(0, excess);
-            this.topIndex = Math.max(0, this.topIndex - excess);
-            this.highlightIndex = Math.max(0, this.highlightIndex - excess);
+            let removeCount = excess;
+            this.lines.splice(0, removeCount);
+            this.topIndex = Math.max(0, this.topIndex - removeCount);
+            this.highlightIndex = Math.max(0, this.highlightIndex - removeCount);
         } else {
-            this.lines.splice(this.lines.length - excess, excess);
+            let removeCount = excess;
+            this.lines.splice(this.lines.length - removeCount, removeCount);
         }
     }
 
-    canSelectTopMarker() {
-        return this.topIndex === 0;
-    }
-
-    canSelectBottomMarker() {
-        return this.fileReader.currentOffset >= this.fileReader.fileSize;
-    }
-
     getHighlightBounds() {
-        const minIndex = this.canSelectTopMarker() ? -1 : 0;
-        const maxIndex = this.canSelectBottomMarker() ? this.lines.length : this.lines.length - 1;
-        return { minIndex, maxIndex };
+        return { minIndex: 0, maxIndex: this.lines.length - 1 };
     }
 }
 
 // ======================================================================
-// Helper: Slices a string based on visible columns (using sliceAnsi and stringWidth)
-// ======================================================================
-// Helper: Slices a string based on visible columns and overlays arrows for horizontal scrolling.
-function formatScrollText(text, scrollLeft, width) {
-  // Get the visible portion of the text.
-  let visible = sliceAnsi(text, scrollLeft, scrollLeft + width);
-  let currentWidth = stringWidth(visible);
-  if (currentWidth < width) {
-    visible += ' '.repeat(width - currentWidth);
-  }
-  
-  // If we've scrolled to the right, overlay a left arrow on the first column.
-  if (scrollLeft > 0) {
-    // Replace the first visible column with a left arrow without changing the total width.
-    let rest = sliceAnsi(visible, 1);
-    visible = '←' + rest;
-  }
-  
-  // If there is more text to the right than fits, overlay a right arrow on the last column.
-  if (stringWidth(text) > scrollLeft + width) {
-    let prefix = sliceAnsi(visible, 0, width - 1);
-    visible = prefix + '→';
-  }
-  
-  return visible;
-}
-// ======================================================================
-// 3. View: Renders the file content and command line, and handles navigation.
-//    The screen is split into two areas:
-//      - contentBox: occupies all but the bottom line.
-//      - cmdBox: occupies the bottommost line.
-//    Also handles command mode and includes new key handlers.
+// 3. View: Renders file content and handles navigation.
 // ======================================================================
 class View {
     constructor(buffer, filePath) {
@@ -334,7 +358,6 @@ class View {
             height: '100%-1',
             tags: true,
             wrap: false,
-
             style: { fg: 'white', bg: 'black' }
         });
         this.cmdBox = blessed.textbox({
@@ -352,7 +375,7 @@ class View {
     }
 
     setCmdHelp() {
-        const helpText = `[q:quit, /:command, c:copy screen] ${this.filePath}`;
+        const helpText = `File: ${this.filePath} [q:quit, /:command, C:copy screen, home/end for jump]`;
         const width = this.screen.width;
         const truncated = helpText.length > width ? helpText.substring(0, width) : helpText;
         this.cmdBox.setContent(truncated);
@@ -368,10 +391,9 @@ class View {
             ' '.repeat(rightPad);
     }
 
-    // Format a Date object with padded hours.
     formatTime(date, includeSeconds) {
         let hours = date.getHours() % 12 || 12;
-        let hoursStr = hours < 10 ? ' ' + hours : '' + hours;
+        let hoursStr = hours < 10 ? '0' + hours : '' + hours;
         const minutes = date.getMinutes();
         const seconds = date.getSeconds();
         const ampm = date.getHours() >= 12 ? 'pm' : 'am';
@@ -424,60 +446,54 @@ class View {
         return parts.join(' ').trim();
     }
 
+    async renderContent() {
+        const totalRows = this.contentBox.height;
+        const width = this.screen.width;
+        let visibleLines = this.buffer.lines.slice(this.buffer.topIndex, this.buffer.topIndex + totalRows);
+        let rows = visibleLines.map(line => {
+            if (line.synthetic) {
+                return this.buildMarkerText(line.markerType, width);
+            } else {
+                const fullText = this.formatLogLine(line.text);
+                return formatScrollText(fullText, this.scrollLeft, width);
+            }
+        });
+        while (rows.length < totalRows) {
+            rows.push(' '.repeat(width));
+        }
+        const highlightRow = this.buffer.highlightIndex - this.buffer.topIndex;
+        if (highlightRow >= 0 && highlightRow < rows.length) {
+            rows[highlightRow] = `{inverse}${rows[highlightRow]}{/inverse}`;
+        }
+        this.contentBox.setContent(rows.join('\n'));
+    }
 
-async renderContent() {
-  const height = this.contentBox.height;
-  const width = this.screen.width;
-  
-  // Determine if a top marker should be shown.
-  const showTopMarker = (this.buffer.topIndex === 0 && this.buffer.highlightIndex !== this.buffer.lines.length);
-  
-  // Calculate available rows after reserving space for the top marker (if any).
-  const availableRows = height - (showTopMarker ? 1 : 0);
-  
-  // The view is anchored at the bottom if topIndex is at its maximum value.
-  const anchoredBottom = this.buffer.topIndex === Math.max(0, this.buffer.lines.length - availableRows)+1 /* +1 for bottom marker row */;
-  
-  // Show bottom marker only if at EOF and the view is exactly anchored at the bottom.
-  const showBottomMarker = this.buffer.canSelectBottomMarker() && anchoredBottom;
-  
-  // Reserve file area rows: subtract one row for the bottom marker if it's shown.
-  const fileArea = availableRows - (showBottomMarker ? 1 : 0);
+    async adjustView() {
+        const totalRows = this.contentBox.height;
+        if (this.buffer.highlightIndex < this.buffer.topIndex) {
+            this.buffer.topIndex = this.buffer.highlightIndex;
+        } else if (this.buffer.highlightIndex >= this.buffer.topIndex + totalRows) {
+            this.buffer.topIndex = this.buffer.highlightIndex - totalRows + 1;
+        }
+    }
 
-  let rows = [];
-  if (showTopMarker) {
-    rows.push(this.buildMarkerText('top', width));
-  }
-  
-  // Get the file lines that fit in the available file area.
-  const visibleLines = this.buffer.lines.slice(this.buffer.topIndex, this.buffer.topIndex + fileArea);
-  
-  let fileRows = visibleLines.map(lineObj => {
-    const rawText = lineObj.text || '';
-    const fullText = this.formatLogLine(rawText);
-    return formatScrollText(fullText, this.scrollLeft, width);
-  });
-  
-  // If there are fewer file lines than fileArea, pad with blank lines.
-  while (fileRows.length < fileArea) {
-    fileRows.push(' '.repeat(width));
-  }
-  
-  rows = rows.concat(fileRows);
-  if (showBottomMarker) {
-    rows.push(this.buildMarkerText('bottom', width));
-  }
-  
-  // Apply highlight styling.
-  const highlightRow = this.calculateHighlightRow(rows.length);
-  if (highlightRow >= 0 && highlightRow < rows.length) {
-    rows[highlightRow] = `{inverse}${rows[highlightRow]}{/inverse}`;
-  }
-  
-  this.contentBox.setContent(rows.join('\n'));
-}
-    
-    // Render full screen: content and command areas.
+    async adjustViewForBottom() {
+        const totalRows = this.contentBox.height;
+        const linesCount = this.buffer.lines.length;
+
+        //If the lineCount is less than the total rows, then there's no scrolling to do
+        if(linesCount <= totalRows) {
+            this.buffer.topIndex = 0;
+            this.buffer.highlightIndex = linesCount > 0 ? linesCount - 1 : 0;
+            return;
+        }
+
+        this.buffer.highlightIndex = linesCount - 1;
+        this.buffer.topIndex = Math.max(0, linesCount - totalRows);
+
+
+    }
+
     async render() {
         await this.renderContent();
         if (!this.cmdActive) {
@@ -492,29 +508,15 @@ async renderContent() {
         this.screen.key(['down'], async () => { if (!this.cmdActive) await this.moveHighlight(1); });
         this.screen.key(['pageup'], async () => { if (!this.cmdActive) await this.moveHighlight(-this.contentBox.height); });
         this.screen.key(['pagedown'], async () => { if (!this.cmdActive) await this.moveHighlight(this.contentBox.height); });
-        this.screen.key(['home'], async () => { if (!this.cmdActive) {
-	    this.screen.realloc();
-	    await this.jumpToTop();
-	}});
-	this.screen.key(['end'], async () => { if (!this.cmdActive) {
-	    this.screen.realloc();
-	    await this.jumpToBottom();
-	}});
-        this.screen.key(['left'], () => { if (!this.cmdActive) {
-	    this.screen.realloc();
-	    this.scroll(-5);
-	}});
-	this.screen.key(['right'], () => { if (!this.cmdActive) {
-	    this.screen.realloc();
-	    this.scroll(5);
-	}});
+        this.screen.key(['home'], async () => { if (!this.cmdActive) await this.jumpToTop(); });
+        this.screen.key(['end'], async () => { if (!this.cmdActive) await this.jumpToBottom(); });
+        this.screen.key(['left'], () => { if (!this.cmdActive) this.scroll(-5); });
+        this.screen.key(['right'], () => { if (!this.cmdActive) this.scroll(5); });
         this.screen.key(['/'], () => { if (!this.cmdActive) this.enterCommandMode(); });
-        // New key: Capital C to copy screen contents.
         this.screen.key(['c'], () => {
             slog("copying screen to clipboard");
             if (!this.cmdActive) this.copyScreen();
         });
-        // Refresh key: Ctrl-L
         this.screen.key(['C-l'], async () => {
             slog("refreshing screen");
             this.screen.realloc();
@@ -523,94 +525,53 @@ async renderContent() {
         this.screen.on('resize', () => { this.render(); });
     }
 
-    calculateHighlightRow(totalRows) {
-        const hasTopMarker = (this.buffer.canSelectTopMarker() && this.buffer.topIndex === 0);
-        const hasBottomMarker = this.buffer.canSelectBottomMarker();
-        const fileArea = totalRows - (hasTopMarker ? 1 : 0) - (hasBottomMarker ? 1 : 0);
-        
-        // Determine how many file lines are available.
-        const availableFileLines = this.buffer.lines.length - this.buffer.topIndex;
-        const topPadding = availableFileLines < fileArea ? fileArea - availableFileLines : 0;
-        
-        if (this.buffer.highlightIndex === -1) return hasTopMarker ? 0 : 0;
-        if (this.buffer.highlightIndex === this.buffer.lines.length) return totalRows - 1;
-        
-        const relativeRow = this.buffer.highlightIndex - this.buffer.topIndex;
-        let highlightRow = (hasTopMarker ? 1 : 0) + topPadding + relativeRow;
-        if (highlightRow >= totalRows) highlightRow = totalRows - 1;
-        return highlightRow;
-    }
-    
     async moveHighlight(delta) {
         const { minIndex, maxIndex } = this.buffer.getHighlightBounds();
         let newIndex = this.buffer.highlightIndex + delta;
         newIndex = Math.max(minIndex, Math.min(newIndex, maxIndex));
         this.buffer.highlightIndex = newIndex;
-        if (delta < 0 && this.buffer.highlightIndex === minIndex && this.buffer.topIndex === 0) {
+        if (delta < 0 && newIndex === minIndex) {
             await this.buffer.fillBackward();
         }
-        if (delta > 0 && this.buffer.highlightIndex === maxIndex && !this.buffer.canSelectBottomMarker()) {
+        if (delta > 0 && newIndex === maxIndex) {
             await this.buffer.fillForward();
         }
-
-	
         await this.adjustView();
-	this.screen.realloc();
-	
+        this.screen.realloc();
         await this.render();
-    }
-
-    async adjustView() {
-	const height = this.contentBox.height;
-	// Determine if a top marker should be shown.
-	const useTopMarker = (this.buffer.topIndex === 0 && this.buffer.highlightIndex !== this.buffer.lines.length);
-	const markerOffset = useTopMarker ? 1 : 0;
-	const fileArea = height - markerOffset - (this.buffer.canSelectBottomMarker() ? 1 : 0);
-
-	// Special handling for the top marker (highlightIndex === -1)
-	if (this.buffer.highlightIndex === -1) {
-            this.buffer.topIndex = 0;
-	} else if (this.buffer.highlightIndex === this.buffer.lines.length) {
-            // When the bottom marker is selected, adjust view to show the last file lines.
-            this.buffer.topIndex = Math.max(0, this.buffer.lines.length - fileArea);
-	} else {
-            // Normal case: Adjust view if the highlighted line is outside the current window.
-            if (this.buffer.highlightIndex < this.buffer.topIndex) {
-		this.buffer.topIndex = this.buffer.highlightIndex;
-            } else if (this.buffer.highlightIndex >= this.buffer.topIndex + fileArea) {
-		this.buffer.topIndex = this.buffer.highlightIndex - fileArea + 1;
-            }
-	}
     }
 
     scroll(delta) {
         this.scrollLeft = Math.max(0, this.scrollLeft + delta);
+        this.screen.realloc();
         this.render();
     }
 
- async jumpToTop() {
-    this.buffer.lines = [];
-    this.buffer.topIndex = 0;
-    this.buffer.highlightIndex = -1;
-    // Reset the file reading pointer to the beginning of the file.
-    this.buffer.fileReader.currentOffset = 0;
-    await this.buffer.fillForward(this.contentBox.height);
-    await this.render();
- }
-    
-    async jumpToBottom() {
+    async jumpToTop() {
         this.buffer.lines = [];
         this.buffer.topIndex = 0;
-        await this.buffer.fillBackward(this.contentBox.height * 2);
-        this.buffer.highlightIndex = this.buffer.lines.length;
-        const stats = await this.buffer.fileReader.fileHandle.stat();
-        this.buffer.fileReader.fileSize = stats.size;
-        this.buffer.fileReader.currentOffset = stats.size;
-        await this.adjustView();
+        this.buffer.highlightIndex = 0;
+        this.buffer.fileReader.seekToBeginning();
+        await this.buffer.fillForward(this.contentBox.height);
+        this.screen.realloc();
         await this.render();
     }
 
-    // Enter command mode: clear cmdBox and accept input.
+    async jumpToBottom() {
+        this.buffer.lines = [];
+        this.buffer.topIndex = 0;
+        await this.buffer.fileReader.seekToEnd();
+        await this.buffer.fillBackward(this.contentBox.height * 2);
+
+        const stats = await this.buffer.fileReader.fileHandle.stat();
+        this.buffer.fileReader.fileSize = stats.size;
+        this.buffer.fileReader.currentOffset = stats.size;
+
+        await this.adjustViewForBottom(); // Use new function here
+        this.screen.realloc();
+        await this.render();
+    }
+
     enterCommandMode() {
         this.cmdActive = true;
         this.cmdBox.clearValue();
@@ -619,16 +580,14 @@ async renderContent() {
             if (err) {
                 this.cmdActive = false;
                 this.setCmdHelp();
-		
-		this.screen.realloc();
+                this.screen.realloc();
                 this.screen.render();
                 return;
             }
-            // Get the currently highlighted log line, if any.
             let parsedLog = null;
-            if (this.buffer.highlightIndex >= 0 && this.buffer.highlightIndex < this.buffer.lines.length) {
-                let rawText = this.buffer.lines[this.buffer.highlightIndex].text;
-                parsedLog = slogParseLine(rawText);
+            const currentLine = this.buffer.lines[this.buffer.highlightIndex];
+            if (currentLine && !currentLine.synthetic) {
+                parsedLog = slogParseLine(currentLine.text);
             }
             const output = await this.executeCommand(value, parsedLog);
             this.cmdBox.setContent(output);
@@ -638,25 +597,21 @@ async renderContent() {
         });
     }
 
-    // Execute the command with command text and parsed log context.
     async executeCommand(commandText, parsedLog) {
         return `Command executed: ${commandText}\nParsed log: ${JSON.stringify(parsedLog)}`;
     }
 
-    // New: Copy current screen contents to the system clipboard.
     async copyScreen() {
-        // Combine the contentBox and cmdBox contents.
         const content = this.contentBox.getContent();
         const cmd = this.cmdBox.getContent();
         const fullScreenText = content.split('\n').concat([cmd]).join('\n');
         await clipboardy.writeSync("====== smore screenshot ======\n" + fullScreenText);
-        // Display a temporary message in the command line.
         this.cmdBox.setContent("Screen copied to clipboard");
         this.screen.render();
         setTimeout(() => {
             if (!this.cmdActive) {
                 this.setCmdHelp();
-		this.screen.realloc();
+                this.screen.realloc();
                 this.screen.render();
             }
         }, 2000);
@@ -679,15 +634,15 @@ async function main() {
         const buffer = new BufferManager(fileReader);
         const view = new View(buffer, filePath);
 
-        // Initial load: read backward so that the bottom of the file is visible.
+        // Initial load: read backward so that the end-of-file is visible.
         await buffer.fillBackward(view.contentBox.height * 2);
-        buffer.highlightIndex = buffer.lines.length; // select bottom marker
+        await view.adjustViewForBottom(); // Use new function here.
 
-        // Update forward pointer.
+        // Update file pointer.
         const stats = await fileReader.fileHandle.stat();
         fileReader.fileSize = stats.size;
         fileReader.currentOffset = stats.size;
-        await view.adjustView();
+
         await view.render();
 
         // Monitor file changes.
@@ -699,18 +654,18 @@ async function main() {
                     fileReader.currentOffset = 0;
                     buffer.lines = [];
                     buffer.topIndex = 0;
-                    buffer.highlightIndex = -1;
+                    buffer.highlightIndex = 0;
+                    fileReader.hasTopMarker = false;
+                    fileReader.hasBottomMarker = false;
                     await buffer.fillForward(view.contentBox.height);
                 } else if (stats.size > fileReader.fileSize) {
                     fileReader.fileSize = stats.size;
-                    if (buffer.highlightIndex === buffer.lines.length) {
+                    if (buffer.highlightIndex === buffer.lines.length - 1) {
                         await buffer.fillForward();
-                        buffer.highlightIndex = buffer.lines.length;
+                        buffer.highlightIndex = buffer.lines.length - 1;
                         await view.adjustView();
                     }
                 }
-		view.screen.realloc();
-
                 await view.render();
             } catch (err) {
                 slog('Error checking file size:', err);
@@ -724,3 +679,22 @@ async function main() {
 }
 
 main();
+
+// ---------------------------------------------------------------------
+// Helper: Slice a string by visible columns using sliceAnsi and stringWidth.
+function formatScrollText(text, scrollLeft, width) {
+    let visible = sliceAnsi(text, scrollLeft, scrollLeft + width);
+    let currentWidth = stringWidth(visible);
+    if (currentWidth < width) {
+        visible += ' '.repeat(width - currentWidth);
+    }
+    if (scrollLeft > 0) {
+        let rest = sliceAnsi(visible, 1);
+        visible = '←' + rest;
+    }
+    if (stringWidth(text) > scrollLeft + width) {
+        let prefix = sliceAnsi(visible, 0, width - 1);
+        visible = prefix + '→';
+    }
+    return visible;
+}
