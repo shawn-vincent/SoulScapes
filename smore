@@ -393,7 +393,7 @@ class View {
 
     formatTime(date, includeSeconds) {
         let hours = date.getHours() % 12 || 12;
-        let hoursStr = hours < 10 ? '0' + hours : '' + hours;
+        let hoursStr = hours < 10 ? ' ' + hours : '' + hours;
         const minutes = date.getMinutes();
         const seconds = date.getSeconds();
         const ampm = date.getHours() >= 12 ? 'pm' : 'am';
@@ -621,6 +621,8 @@ class View {
 // ======================================================================
 // 4. Main / Auto-Refresh: Setup, initial load, and file-change monitoring.
 // ======================================================================
+
+
 async function main() {
     if (process.argv.length < 3) {
         console.error('Usage: smore <filename>');
@@ -646,31 +648,47 @@ async function main() {
         await view.render();
 
         // Monitor file changes.
-        setInterval(async () => {
-            try {
-                const stats = await fileReader.fileHandle.stat();
-                if (stats.size < fileReader.fileSize) {
-                    fileReader.fileSize = stats.size;
-                    fileReader.currentOffset = 0;
-                    buffer.lines = [];
-                    buffer.topIndex = 0;
-                    buffer.highlightIndex = 0;
-                    fileReader.hasTopMarker = false;
-                    fileReader.hasBottomMarker = false;
-                    await buffer.fillForward(view.contentBox.height);
-                } else if (stats.size > fileReader.fileSize) {
-                    fileReader.fileSize = stats.size;
-                    if (buffer.highlightIndex === buffer.lines.length - 1) {
-                        await buffer.fillForward();
-                        buffer.highlightIndex = buffer.lines.length - 1;
-                        await view.adjustView();
-                    }
-                }
-                await view.render();
-            } catch (err) {
-                slog('Error checking file size:', err);
-            }
-        }, CONFIG.refreshInterval);
+	setInterval(async () => {
+	    try {
+		const stats = await fileReader.fileHandle.stat();
+		if (stats.size < fileReader.fileSize) {
+		    // File truncation (shrinkage)
+		    fileReader.fileSize = stats.size;
+		    fileReader.currentOffset = 0;
+		    buffer.lines = [];
+		    buffer.topIndex = 0;
+		    buffer.highlightIndex = 0;
+		    fileReader.hasTopMarker = false;
+		    fileReader.hasBottomMarker = false;
+		    await buffer.fillForward(view.contentBox.height);
+		    await view.render();
+		} else if (stats.size > fileReader.fileSize) {
+		    // File extension (growth)
+		    const previousFileSize = fileReader.fileSize; //Store the old value.
+		    fileReader.fileSize = stats.size;
+
+		    //Check is the last line the cursor is on is bottom.
+		    const isAtBottom = buffer.lines.length > 0 && buffer.highlightIndex === buffer.lines.length - 1 && buffer.lines[buffer.highlightIndex].markerType === 'bottom';
+
+		    if (isAtBottom) {
+
+			//Remove the last bottom marker.
+			if (buffer.lines.length > 0 && buffer.lines[buffer.lines.length - 1].markerType === 'bottom') {
+			    buffer.lines.pop();
+			    buffer.highlightIndex = Math.max(0, buffer.highlightIndex - 1); // Adjust highlight index if needed
+			}
+			fileReader.hasBottomMarker = false;
+			await buffer.fillForward(view.contentBox.height);
+			await view.adjustViewForBottom();
+
+		    }
+		    fileReader.currentOffset = stats.size;
+		}
+		await view.render();
+	    } catch (err) {
+		slog('Error checking file size:', err);
+	    }
+	}, CONFIG.refreshInterval);
 
     } catch (err) {
         slog('Error:', err);
