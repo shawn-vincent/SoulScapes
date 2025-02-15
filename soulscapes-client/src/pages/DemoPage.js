@@ -1,58 +1,77 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import styled, { StyleSheetManager, keyframes } from 'styled-components';
-import { format } from 'date-fns';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from 'react';
+import styled, {
+  StyleSheetManager,
+  keyframes,
+} from 'styled-components';
+import {
+  format,
+} from 'date-fns';
 import * as PIXI from 'pixi.js';
 
-// ---------------- Keyframes Animations ----------------
+//
+// ----- Configuration (same as before) -----
+//
+const messageTypes = ['chat', 'event', 'action', 'error'];
+const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
 
+//
+// ----- Keyframe Animations (same as before) -----
+//
 const floatFall = keyframes`
   0% {
-      transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
-      opacity: 0;
+    transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
+    opacity: 0;
   }
   40% {
-      transform: translateY(-55vh) translateX(-20vw) rotate(10deg);
-      opacity: 0.75;
+    transform: translateY(-55vh) translateX(-20vw) rotate(10deg);
+    opacity: 0.75;
   }
   65% {
-      transform: translateY(-10vh) translateX(10vw) rotate(-5deg);
-      opacity: 1;
+    transform: translateY(-10vh) translateX(10vw) rotate(-5deg);
+    opacity: 1;
   }
   100% {
-      transform: translateY(0) translateX(0) rotate(0deg);
-      opacity: 1;
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 1;
   }
 `;
 
 const flicker = keyframes`
   0% {
-      opacity: 0.8;
+    opacity: 0.8;
   }
   10% {
-      opacity: 0.4;
+    opacity: 0.4;
   }
   20% {
-      opacity: 1;
+    opacity: 1;
   }
   35% {
-      opacity: 0.6;
+    opacity: 0.6;
   }
   50% {
-      opacity: 0.95;
+    opacity: 0.95;
   }
   65% {
-      opacity: 0.5;
+    opacity: 0.5;
   }
   80% {
-      opacity: 1;
+    opacity: 1;
   }
   100% {
-      opacity: 1;
+    opacity: 1;
   }
 `;
 
-// ---------------- Styled Components ----------------
-
+//
+// ----- Styled Components (mostly same as before) -----
+//
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -78,241 +97,285 @@ const ScrollableContent = styled.div`
   -ms-overflow-style: none;
   scrollbar-width: none;
   &::-webkit-scrollbar {
-      display: none;
+    display: none;
   }
 `;
 
-// ---------------- MessagePlaceholder ----------------
-
-const MessagePlaceholder = ({ isNew, animationType, children, onAnimationComplete }) => {
-  // For new messages, the container starts at height 0 and expands to 80px.
+//
+// ----- The updated MessagePlaceholder with `materialize` fix -----
+//
+const MessagePlaceholder = ({
+  isNew,
+  animationType,
+  children,
+  onAnimationComplete,
+}) => {
   const [height, setHeight] = useState(isNew ? 0 : 80);
-  // Controls when the message content fades in.
   const [animate, setAnimate] = useState(false);
-  // Controls whether the PIXI effect is active.
   const [pixiActive, setPixiActive] = useState(false);
-  // Reference to the outer container (we’ll use its first child to compute the target center).
   const containerRef = useRef(null);
 
-  // For non-materialize animations, we use an initial style.
-  const getInitialInnerStyle = type => {
-    switch (type) {
-      case 'drop':
-        return { opacity: 0, transform: 'translateY(-100vh)' };
-      case 'float':
-        return { opacity: 0, transform: 'translateY(-100vh) translateX(10vw) rotate(10deg)' };
-      case 'zip':
-        return { opacity: 0, transform: 'translateX(100vw)' };
-      case 'flicker':
-        return { opacity: 0.2, transform: 'none' };
-      case 'materialize':
-        return { opacity: 0, transform: 'none' };
-      case 'fade':
-      default:
-        return { opacity: 0, transform: 'none' };
-    }
-  };
+  // --- initialStyle same as before ---
+  const initialStyle = useMemo(() => {
+    const getInitialInnerStyle = (type) => {
+      switch (type) {
+        case 'drop':
+          return { opacity: 0, transform: 'translateY(-100vh)' };
+        case 'float':
+          return {
+            opacity: 0,
+            transform: 'translateY(-100vh) translateX(10vw) rotate(10deg)',
+          };
+        case 'zip':
+          return { opacity: 0, transform: 'translateX(100vw)' };
+        case 'flicker':
+          return { opacity: 0.2, transform: 'none' };
+        case 'materialize':
+          return { opacity: 0, transform: 'none' };
+        case 'fade':
+        default:
+          return { opacity: 0, transform: 'none' };
+      }
+    };
 
-  const initialStyle = isNew ? getInitialInnerStyle(animationType) : { opacity: 1, transform: 'none' };
+    return isNew ? getInitialInnerStyle(animationType) : { opacity: 1, transform: 'none' };
+  }, [isNew, animationType]);
+
+  // --- startAnimation same as before, except we setPixiActive for 'materialize' ---
+  const startAnimation = useCallback(() => {
+    setHeight(80);
+
+    if (animationType === 'materialize') {
+      setPixiActive(true);
+    }
+
+    const timer1 = setTimeout(() => {
+      setAnimate(true);
+    }, 500);
+
+    const completionDelay =
+      animationType === 'float'
+        ? 2100
+        : animationType === 'flicker'
+        ? 1200
+        : animationType === 'materialize'
+        ? 2100
+        : 800;
+
+    const timer2 = setTimeout(() => {
+      if (onAnimationComplete) onAnimationComplete();
+      // We stop the pixi effect after the animation is complete
+      setPixiActive(false);
+    }, completionDelay);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [animationType, onAnimationComplete]);
 
   useEffect(() => {
     if (isNew) {
-      setHeight(80);
-      if (animationType === 'materialize') {
-        setPixiActive(true);
-      }
-      // Delay before message content fades in.
-      const timer1 = setTimeout(() => {
-        setAnimate(true);
-      }, 500);
-
-      // Total animation duration.
-      const completionDelay =
-        animationType === 'float'
-          ? 2100
-          : animationType === 'flicker'
-            ? 1200
-            : animationType === 'materialize'
-              ? 2100
-              : 800;
-      const timer2 = setTimeout(() => {
-        if (onAnimationComplete) onAnimationComplete();
-        setPixiActive(false);
-      }, completionDelay);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
+      return startAnimation();
     }
-  }, [isNew, animationType, onAnimationComplete]);
+  }, [isNew, startAnimation]);
 
-  // ------------- MaterializeEffect Component -------------
-  // This component creates a full-screen PIXI canvas.
-  // Dots appear at random positions within a circle centered on the message.
-  // That circle is larger than the screen so some dots start off-screen.
-  // All dots travel toward the center of the message (and circle) and vanish as they arrive.
-  const MaterializeEffect = ({ duration = 2100 }) => {
-    const pixiApp = useRef(null);
+  //
+  // ----- MaterializeEffect: now uses Sprite instead of Graphics -----
+  //
+  const MaterializeEffect = ({
+    duration = 2100,
+    dotColor = 0xffffff,
+    dotInnerRadius = 2,
+    dotOuterRadiusMultiplier = 3,
+  }) => {
+    const pixiApp = useRef(window.pixiApp);
+    const dots = useRef(window.dots);
+    const dotPool = useRef([]);
+
+    // Instead of fully destroying the container, we just removeChildren
+    const cleanupDots = useCallback(() => {
+      if (dots.current) {
+        dots.current.removeChildren(); // empty the container
+      }
+      // Destroy any sprites we created
+      dotPool.current.forEach((sprite) => {
+        if (sprite && sprite.destroy) {
+          sprite.destroy();
+        }
+      });
+      dotPool.current = [];
+    }, []);
 
     useEffect(() => {
-      if (containerRef.current && !pixiApp.current && pixiActive) {
+      let animationFrameId;
+      if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
         const canvasWidth = window.innerWidth;
         const canvasHeight = window.innerHeight;
-        // Compute the target center based on the message element.
-        let targetX = 0, targetY = 0;
-        const messageElem = containerRef.current.firstElementChild;
-        if (messageElem) {
-          const rect = messageElem.getBoundingClientRect();
-          targetX = rect.left + rect.width / 2;
-          targetY = rect.top + rect.height / 2;
-        } else {
-          const rect = containerRef.current.getBoundingClientRect();
-          targetX = rect.left + rect.width / 2;
-          targetY = rect.top + rect.height / 2;
-        }
 
-        // Define a circle (centered at the target) that’s larger than the screen.
-        // For example, use a radius 1.2× the maximum of the canvas dimensions.
+        const getTargetCoordinates = () => {
+          if (!containerRef.current) {
+            return { x: canvasWidth / 2, y: canvasHeight / 2 };
+          }
+          const messageElem = containerRef.current.firstElementChild;
+          const rect = messageElem
+            ? messageElem.getBoundingClientRect()
+            : containerRef.current.getBoundingClientRect();
+
+          return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+        };
+
+        const { x: targetX, y: targetY } = getTargetCoordinates();
         const circleRadius = Math.max(canvasWidth, canvasHeight) * 1.2;
-
-        // Initialize full-screen PIXI.
-        pixiApp.current = new PIXI.Application({
-          width: canvasWidth,
-          height: canvasHeight,
-          resolution: window.devicePixelRatio || 1,
-          autoDensity: true,
-          transparent: true,
-        });
-
-        const pixiContainer = document.getElementById('pixi-container');
-        if (pixiContainer) {
-          pixiContainer.appendChild(pixiApp.current.view);
-        }
-
-        const dots = new PIXI.Graphics();
-        dots.blendMode = PIXI.BLEND_MODES.ADD; // For a glowing effect.
-        pixiApp.current.stage.addChild(dots);
-
-        const totalDots = 500;
-        const maxDelay = duration * 0.5; // Random delays up to 50% of duration.
+        const totalDots = 300; // smaller number for demo
+        const maxDelay = duration * 0.5;
         const dotsData = [];
 
-        // Generate a random point within a circle (using polar coordinates).
-        // This yields points uniformly distributed within the circle.
-        const createDot = () => {
+        // Prepare a list of random spawn positions around the message
+        for (let i = 0; i < totalDots; i++) {
           const angle = Math.random() * 2 * Math.PI;
           const r = Math.sqrt(Math.random()) * circleRadius;
-          // Dot's starting position is offset from the target.
           const startX = targetX + r * Math.cos(angle);
           const startY = targetY + r * Math.sin(angle);
           const delay = Math.random() * maxDelay;
-          const innerRadius = 1 + Math.random() * 2;
-          return { startX, startY, delay, innerRadius };
-        };
-
-        for (let i = 0; i < totalDots; i++) {
-          dotsData.push(createDot());
+          const innerRadius = dotInnerRadius + Math.random() * 2;
+          dotsData.push({ startX, startY, delay, innerRadius });
         }
 
         const startTime = performance.now();
 
+        // Animate using a requestAnimationFrame loop
         const animateDots = () => {
           const elapsed = performance.now() - startTime;
-          dots.clear();
 
-          dotsData.forEach(dot => {
-            const localTime = elapsed - dot.delay;
-            if (localTime < 0) return; // Dot hasn't started yet.
+          for (let i = 0; i < totalDots; i++) {
+            let dotSprite = dotPool.current[i];
+            if (!dotSprite) {
+              // Create a new sprite from our global circleTexture
+              dotSprite = new PIXI.Sprite(window.circleTexture);
+              dotSprite.anchor.set(0.5);
+              dotPool.current[i] = dotSprite;
+            }
 
-            // Each dot’s progress (from 0 to 1) such that it reaches the target at the end.
-            const progress = Math.min(1, localTime / (duration - dot.delay));
+            const dotData = dotsData[i];
+            const localTime = elapsed - dotData.delay;
+            if (localTime < 0) {
+              // Dot hasn't started yet; remove from stage if present
+              if (dotSprite.parent) {
+                dots.current.removeChild(dotSprite);
+              }
+              continue;
+            }
+
+            const progress = Math.min(1, localTime / (duration - dotData.delay));
             const alpha = 1 - progress;
+            const currentX = dotData.startX + progress * (targetX - dotData.startX);
+            const currentY = dotData.startY + progress * (targetY - dotData.startY);
 
-            // Linear interpolation from dot's starting point to target.
-            const currentX = dot.startX + progress * (targetX - dot.startX);
-            const currentY = dot.startY + progress * (targetY - dot.startY);
+            // Only add to container once it starts
+            if (!dotSprite.parent) {
+              dots.current.addChild(dotSprite);
+            }
 
-            // Draw outer glow.
-            const outerRadius = dot.innerRadius * 3;
-            dots.beginFill(0xffffff, alpha * 0.5);
-            dots.drawCircle(currentX, currentY, outerRadius);
-            dots.endFill();
+            // scale the sprite using innerRadius + outer multiplier
+            const outerRadius = dotData.innerRadius * dotOuterRadiusMultiplier;
+            // We'll pick an overall radius for the sprite
+            // You can do more sophisticated layering if you want outer+inner glow
+            const finalRadius = outerRadius; // use the bigger radius
+            // For example, if circleTexture was drawn at 6px radius, scale to match finalRadius
+            // but we need our baseRadius that we used when generating circleTexture:
+            const baseRadius = window.baseRadius || 6; // we assigned it in the main init
+            const scaleFactor = finalRadius / baseRadius;
 
-            // Draw inner core.
-            dots.beginFill(0xffffff, alpha);
-            dots.drawCircle(currentX, currentY, dot.innerRadius);
-            dots.endFill();
-          });
+            dotSprite.tint = dotColor; // color
+            dotSprite.x = currentX;
+            dotSprite.y = currentY;
+            dotSprite.alpha = alpha * 0.6; // slightly dim the circles
+            dotSprite.scale.set(scaleFactor);
+          }
 
           if (elapsed < duration) {
-            // Continue animation.
+            animationFrameId = requestAnimationFrame(animateDots);
           } else {
-            pixiApp.current.ticker.remove(animateDots);
+            // animation finished
+            cleanupDots();
           }
         };
 
-        pixiApp.current.ticker.add(animateDots);
-      }
+        animateDots();
 
-      return () => {
-        if (pixiApp.current) {
-          pixiApp.current.destroy(true, { children: true, texture: true, baseTexture: true });
-          pixiApp.current = null;
-        }
-        const pixiContainer = document.getElementById('pixi-container');
-        if (pixiContainer) {
-          pixiContainer.innerHTML = '';
-        }
-      };
-    }, [duration, pixiActive]);
+        return () => {
+          cancelAnimationFrame(animationFrameId);
+          cleanupDots();
+        };
+      }
+    }, [duration, pixiActive, dotColor, dotInnerRadius, dotOuterRadiusMultiplier, cleanupDots]);
 
     return null;
   };
 
   return (
-    <div style={{ position: 'relative', height, transition: 'height 0.5s ease-out' }} ref={containerRef}>
+    <div
+      style={{
+        position: 'relative',
+        height,
+        transition: 'height 0.5s ease-out',
+      }}
+      ref={containerRef}
+    >
       <div
         style={{
           opacity: animate ? 1 : initialStyle.opacity,
           transform: animate ? 'none' : initialStyle.transform,
           transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
           position: 'relative',
-          zIndex: 3, // Ensure the message content is above the PIXI canvas.
-          ...(animate && animationType === 'float' && { animation: `${floatFall} 2s ease-out forwards` }),
-          ...(animate && animationType === 'flicker' && { animation: `${flicker} 1s ease-out forwards` }),
+          zIndex: 3,
+          ...(animate && animationType === 'float' && {
+            animation: `${floatFall} 2s ease-out forwards`,
+          }),
+          ...(animate && animationType === 'flicker' && {
+            animation: `${flicker} 1s ease-out forwards`,
+          }),
         }}
       >
         {children}
       </div>
-      {animationType === 'materialize' && pixiActive && <MaterializeEffect duration={2100} />}
+      {animationType === 'materialize' && pixiActive && (
+        <MaterializeEffect duration={2100} dotColor={0xffff00} />
+      )}
     </div>
   );
 };
 
-// ---------------- EventScroller ----------------
-
+//
+// ----- EventScroller (same as before) -----
+//
 const EventScroller = ({ children }) => {
   const scrollableContentRef = useRef(null);
+
   const scrollToBottom = useCallback(() => {
     if (scrollableContentRef.current) {
       scrollableContentRef.current.scrollTop = 0;
     }
   }, []);
+
   useEffect(() => {
     scrollToBottom();
   }, [children, scrollToBottom]);
+
   return (
     <ScrollerContainer>
-      <ScrollableContent ref={scrollableContentRef}>
-        {children}
-      </ScrollableContent>
+      <ScrollableContent ref={scrollableContentRef}>{children}</ScrollableContent>
     </ScrollerContainer>
   );
 };
 
-// ---------------- Message Components ----------------
-
+//
+// ----- Message Components (same as before) -----
+//
 const MessageBase = styled.div`
   padding: 10px;
   margin: 10px;
@@ -323,7 +386,7 @@ const MessageBase = styled.div`
   position: relative;
   z-index: 4; /* Ensure the message is above the PIXI animation */
   &::after {
-    content: '${props => props.dateTime}';
+    content: '${(props) => props.dateTime}';
     display: block;
     font-size: 0.7em;
     margin-top: 3px;
@@ -371,7 +434,8 @@ const MessageComponent = ({ message, dateTime }) => {
     case 'chat':
       return (
         <ChatMessage dateTime={dateTime}>
-          <strong>{message.user}:</strong> {message.text}
+          <strong>{message.user}: </strong>
+          {message.text}
         </ChatMessage>
       );
     case 'event':
@@ -385,8 +449,9 @@ const MessageComponent = ({ message, dateTime }) => {
   }
 };
 
-// ---------------- Other Page Components ----------------
-
+//
+// ----- Background and PageContainer (same as before) -----
+//
 const Background = styled.div`
   position: fixed;
   top: 0;
@@ -399,7 +464,6 @@ const Background = styled.div`
   z-index: -1;
 `;
 
-/* The PageContainer itself has no background so that the black transparent background belongs solely to the EventScroller */
 const PageContainer = styled.div`
   width: 80%;
   max-width: 800px;
@@ -430,7 +494,6 @@ const StyledButton = styled.button`
   }
 `;
 
-// A dedicated full-screen container for PIXI canvases.
 const PixiContainer = styled.div`
   position: fixed;
   top: 0;
@@ -441,12 +504,44 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
-// ---------------- DemoPage ----------------
+//
+// ----- Utility to create a new random message (same as before) -----
+//
+const createRandomMessage = (id, type, animation) => {
+  const now = new Date();
+  const newMessage = {
+    id,
+    date: now,
+    isNew: true,
+    type,
+    animation,
+  };
 
+  switch (type) {
+    case 'chat':
+      newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
+      newMessage.text = 'New Chat: This is a new chat message.';
+      break;
+    case 'event':
+      newMessage.text = 'New Event: A new event occurred.';
+      break;
+    case 'action':
+      newMessage.text = 'New Action: An action just took place.';
+      break;
+    case 'error':
+      newMessage.text = 'New Error: Something went wrong!';
+      break;
+    default:
+      newMessage.text = 'Unknown message type.';
+  }
+
+  return newMessage;
+};
+
+//
+// ----- The main DemoPage component -----
+//
 const DemoPage = () => {
-  const messageTypes = ['chat', 'event', 'action', 'error'];
-  const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
-
   const [messages, setMessages] = useState(() => {
     const now = new Date();
     const initialMessages = [];
@@ -470,85 +565,151 @@ const DemoPage = () => {
       } else if (type === 'error') {
         message.text = `Message ${i}: Something went wrong!`;
       }
-      // Randomly assign an animation for each message.
       message.animation = animations[Math.floor(Math.random() * animations.length)];
       initialMessages.push(message);
     }
     return initialMessages;
   });
-
   const nextIdRef = useRef(21);
   const [selectedType, setSelectedType] = useState(messageTypes[0]);
   const [selectedAnimation, setSelectedAnimation] = useState(animations[0]);
 
-  const addRandomMessage = () => {
-    const now = new Date();
-    const newMessage = {
-      id: nextIdRef.current++,
-      date: now,
-      isNew: true,
-      type: selectedType,
-      animation: selectedAnimation,
-    };
-    if (selectedType === 'chat') {
-      newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-      newMessage.text = 'New Chat: This is a new chat message.';
-    } else if (selectedType === 'event') {
-      newMessage.text = 'New Event: A new event occurred.';
-    } else if (selectedType === 'action') {
-      newMessage.text = 'New Action: An action just took place.';
-    } else if (selectedType === 'error') {
-      newMessage.text = 'New Error: Something went wrong!';
+  //
+  // Add a random message using user-selected type+animation
+  //
+  const addRandomMessage = useCallback(() => {
+    const newMessage = createRandomMessage(
+      nextIdRef.current++,
+      selectedType,
+      selectedAnimation
+    );
+    setMessages((prev) => [newMessage, ...prev]);
+  }, [selectedType, selectedAnimation]);
+
+  //
+  // Mark message as no longer "isNew" once its animation completes
+  //
+  const markMessageAsFinal = useCallback((id) => {
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
+    );
+  }, []);
+
+  //
+  // Render each message in a placeholder with animation
+  //
+  const renderMessage = useCallback(
+    (msg) => {
+      const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
+      return (
+        <MessagePlaceholder
+          key={msg.id}
+          isNew={msg.isNew}
+          animationType={msg.animation}
+          onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
+        >
+          <MessageComponent message={msg} dateTime={dateTimeStr} />
+        </MessagePlaceholder>
+      );
+    },
+    [markMessageAsFinal]
+  );
+
+  //
+  // 1) Initialize the PIXI app once and store in window
+  // 2) Create a circle texture to use for "materialize" dots
+  //
+  useEffect(() => {
+    if (!window.pixiApp) {
+      // create PIXI app
+      const canvasWidth = window.innerWidth;
+      const canvasHeight = window.innerHeight;
+
+      window.pixiApp = new PIXI.Application({
+        width: canvasWidth,
+        height: canvasHeight,
+        resolution: window.devicePixelRatio || 1,
+        autoDensity: true,
+        transparent: true,
+      });
+
+      const pixiContainer = document.getElementById('pixi-container');
+      if (!pixiContainer) {
+        console.error('PIXI container not found! Materialize effect will not work.');
+        return;
+      }
+      pixiContainer.appendChild(window.pixiApp.view);
+
+      // create a ParticleContainer
+      window.dots = new PIXI.ParticleContainer(1000, {
+        scale: true,
+        position: true,
+        alpha: true,
+        tint: true, // allow color tinting
+      });
+      window.dots.blendMode = PIXI.BLEND_MODES.ADD;
+      window.pixiApp.stage.addChild(window.dots);
+
+      // Create a small white circle shape in a Graphics
+      const baseRadius = 6; // ~6px radius
+      window.baseRadius = baseRadius; // store so we can scale later
+      const circleGfx = new PIXI.Graphics();
+      circleGfx.beginFill(0xffffff);
+      circleGfx.drawCircle(0, 0, baseRadius);
+      circleGfx.endFill();
+
+      // Generate a texture from that Graphics
+      window.circleTexture = window.pixiApp.renderer.generateTexture(circleGfx);
     }
-    setMessages(prev => [newMessage, ...prev]);
-  };
 
-  const markMessageAsFinal = id => {
-    setMessages(prev =>
-      prev.map(msg => (msg.id === id ? { ...msg, isNew: false } : msg))
-    );
-  };
+    // Cleanup: destroy pixiApp once when unmounting
+    return () => {
+      if (window.pixiApp) {
+        if (window.dots) {
+          window.dots.removeChildren(); // empty container
+          window.dots.destroy({ children: true });
+          window.dots = null;
+        }
+        window.pixiApp.destroy(true, { children: true, texture: true, baseTexture: true });
+        window.pixiApp = null;
 
-  const renderMessage = msg => {
-    const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
-    return (
-      <MessagePlaceholder
-        key={msg.id}
-        isNew={msg.isNew}
-        animationType={msg.animation}
-        onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
-      >
-        <MessageComponent message={msg} dateTime={dateTimeStr} />
-      </MessagePlaceholder>
-    );
-  };
+        const pixiContainer = document.getElementById('pixi-container');
+        if (pixiContainer) {
+          pixiContainer.innerHTML = '';
+        }
+      }
+    };
+  }, []);
 
   return (
-    <StyleSheetManager shouldForwardProp={prop => prop !== 'exiting'}>
+    <StyleSheetManager shouldForwardProp={(prop) => prop !== 'exiting'}>
       <Background />
-      {/* Full-screen container for PIXI canvases */}
+      {/** Full-screen container for PIXI canvases **/}
       <PixiContainer id="pixi-container" />
+
       <ButtonBar style={{ flexDirection: 'column' }}>
-        <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
-          <select
-            value={selectedType}
-            onChange={e => setSelectedType(e.target.value)}
-          >
-            {messageTypes.map(type => (
-              <option key={type} value={type}>{type}</option>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: '10px', marginBottom: '10px' }}>
+          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+            {messageTypes.map((typeItem) => (
+              <option key={typeItem} value={typeItem}>
+                {typeItem}
+              </option>
             ))}
           </select>
           <select
             value={selectedAnimation}
-            onChange={e => setSelectedAnimation(e.target.value)}
+            onChange={(e) => setSelectedAnimation(e.target.value)}
           >
-            {animations.map(animation => (
-              <option key={animation} value={animation}>{animation}</option>
+            {animations.map((animation) => (
+              <option key={animation} value={animation}>
+                {animation}
+              </option>
             ))}
           </select>
         </div>
         <StyledButton onClick={addRandomMessage}>Add Message</StyledButton>
       </ButtonBar>
+
       <PageContainer>
         <EventScroller>{messages.map(renderMessage)}</EventScroller>
       </PageContainer>
