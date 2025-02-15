@@ -206,114 +206,115 @@ const MessagePlaceholder = ({
       });
       dotPool.current = [];
     }, []);
+// Inside your MaterializeEffect component:
+useEffect(() => {
+  let animationFrameId;
+  if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
+    const totalDots = 300;
+    const maxDelay = duration * 0.5;
+    const dotsData = [];
 
-    useEffect(() => {
-      let animationFrameId;
-      if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
-        const canvasWidth = window.innerWidth;
-        const canvasHeight = window.innerHeight;
+    // 1) Get the center of the message in *DOM* coords
+    const getTargetCoordinates = () => {
+      // Fallback if no container
+      if (!containerRef.current) return { x: 0, y: 0 };
 
-        const getTargetCoordinates = () => {
-          if (!containerRef.current) {
-            return { x: canvasWidth / 2, y: canvasHeight / 2 };
-          }
-          const messageElem = containerRef.current.firstElementChild;
-          const rect = messageElem
-            ? messageElem.getBoundingClientRect()
-            : containerRef.current.getBoundingClientRect();
+      const messageElem = containerRef.current.firstElementChild;
+      const rect = messageElem
+        ? messageElem.getBoundingClientRect()
+        : containerRef.current.getBoundingClientRect();
 
-          return {
-            x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2,
-          };
-        };
+      const msgCenterX = rect.left + rect.width / 2;
+      const msgCenterY = rect.top + rect.height / 2;
 
-        const { x: targetX, y: targetY } = getTargetCoordinates();
-        const circleRadius = Math.max(canvasWidth, canvasHeight) * 1.2;
-        const totalDots = 300; // smaller number for demo
-        const maxDelay = duration * 0.5;
-        const dotsData = [];
+      // 2) Convert DOM coords --> PIXI coords:
+      // "mapPositionToPoint" accounts for scrolling, canvas offset, etc.
+      const point = new PIXI.Point();
+      pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
+        point,
+        msgCenterX,
+        msgCenterY
+      );
+      return { x: point.x, y: point.y };
+    };
 
-        // Prepare a list of random spawn positions around the message
-        for (let i = 0; i < totalDots; i++) {
-          const angle = Math.random() * 2 * Math.PI;
-          const r = Math.sqrt(Math.random()) * circleRadius;
-          const startX = targetX + r * Math.cos(angle);
-          const startY = targetY + r * Math.sin(angle);
-          const delay = Math.random() * maxDelay;
-          const innerRadius = dotInnerRadius + Math.random() * 2;
-          dotsData.push({ startX, startY, delay, innerRadius });
+    const { x: targetX, y: targetY } = getTargetCoordinates();
+
+    // 3) Precompute random spawn positions in a big circle around target
+    // (in the *same* PIXI coordinate space).
+    const circleRadius = Math.max(
+      pixiApp.current.renderer.width,
+      pixiApp.current.renderer.height
+    ) * 1.2;
+
+    for (let i = 0; i < totalDots; i++) {
+      const angle = Math.random() * 2 * Math.PI;
+      const r = Math.sqrt(Math.random()) * circleRadius;
+      const startX = targetX + r * Math.cos(angle);
+      const startY = targetY + r * Math.sin(angle);
+      const delay = Math.random() * maxDelay;
+      const innerRadius = dotInnerRadius + Math.random() * 2;
+      dotsData.push({ startX, startY, delay, innerRadius });
+    }
+
+    const startTime = performance.now();
+
+    const animateDots = () => {
+      const elapsed = performance.now() - startTime;
+
+      for (let i = 0; i < totalDots; i++) {
+        let dotSprite = dotPool.current[i];
+        if (!dotSprite) {
+          dotSprite = new PIXI.Sprite(window.circleTexture);
+          dotSprite.anchor.set(0.5);
+          dotPool.current[i] = dotSprite;
         }
 
-        const startTime = performance.now();
+        const dotData = dotsData[i];
+        const localTime = elapsed - dotData.delay;
+        if (localTime < 0) {
+          // not started yet
+          if (dotSprite.parent) dots.current.removeChild(dotSprite);
+          continue;
+        }
 
-        // Animate using a requestAnimationFrame loop
-        const animateDots = () => {
-          const elapsed = performance.now() - startTime;
+        const progress = Math.min(1, localTime / (duration - dotData.delay));
+        const alpha = 1 - progress;
+        const currentX = dotData.startX + progress * (targetX - dotData.startX);
+        const currentY = dotData.startY + progress * (targetY - dotData.startY);
 
-          for (let i = 0; i < totalDots; i++) {
-            let dotSprite = dotPool.current[i];
-            if (!dotSprite) {
-              // Create a new sprite from our global circleTexture
-              dotSprite = new PIXI.Sprite(window.circleTexture);
-              dotSprite.anchor.set(0.5);
-              dotPool.current[i] = dotSprite;
-            }
+        if (!dotSprite.parent) dots.current.addChild(dotSprite);
 
-            const dotData = dotsData[i];
-            const localTime = elapsed - dotData.delay;
-            if (localTime < 0) {
-              // Dot hasn't started yet; remove from stage if present
-              if (dotSprite.parent) {
-                dots.current.removeChild(dotSprite);
-              }
-              continue;
-            }
+        // Scale the sprite by how big you want the "outer glow"
+        const outerRadius = dotData.innerRadius * dotOuterRadiusMultiplier;
+        const baseRadius = window.baseRadius || 6; // same as where we drew circleGfx
+        const scaleFactor = outerRadius / baseRadius;
 
-            const progress = Math.min(1, localTime / (duration - dotData.delay));
-            const alpha = 1 - progress;
-            const currentX = dotData.startX + progress * (targetX - dotData.startX);
-            const currentY = dotData.startY + progress * (targetY - dotData.startY);
-
-            // Only add to container once it starts
-            if (!dotSprite.parent) {
-              dots.current.addChild(dotSprite);
-            }
-
-            // scale the sprite using innerRadius + outer multiplier
-            const outerRadius = dotData.innerRadius * dotOuterRadiusMultiplier;
-            // We'll pick an overall radius for the sprite
-            // You can do more sophisticated layering if you want outer+inner glow
-            const finalRadius = outerRadius; // use the bigger radius
-            // For example, if circleTexture was drawn at 6px radius, scale to match finalRadius
-            // but we need our baseRadius that we used when generating circleTexture:
-            const baseRadius = window.baseRadius || 6; // we assigned it in the main init
-            const scaleFactor = finalRadius / baseRadius;
-
-            dotSprite.tint = dotColor; // color
-            dotSprite.x = currentX;
-            dotSprite.y = currentY;
-            dotSprite.alpha = alpha * 0.6; // slightly dim the circles
-            dotSprite.scale.set(scaleFactor);
-          }
-
-          if (elapsed < duration) {
-            animationFrameId = requestAnimationFrame(animateDots);
-          } else {
-            // animation finished
-            cleanupDots();
-          }
-        };
-
-        animateDots();
-
-        return () => {
-          cancelAnimationFrame(animationFrameId);
-          cleanupDots();
-        };
+        dotSprite.tint = dotColor;
+        dotSprite.x = currentX;
+        dotSprite.y = currentY;
+        dotSprite.alpha = alpha;
+        dotSprite.scale.set(scaleFactor);
       }
-    }, [duration, pixiActive, dotColor, dotInnerRadius, dotOuterRadiusMultiplier, cleanupDots]);
 
+      if (elapsed < duration) {
+        animationFrameId = requestAnimationFrame(animateDots);
+      } else {
+        // Animation done; remove children etc.
+        cleanupDots();
+      }
+    };
+
+    animateDots();
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      cleanupDots();
+    };
+  }
+}, [duration, pixiActive, dotColor, dotInnerRadius,
+    dotOuterRadiusMultiplier, cleanupDots]);
+      
     return null;
   };
 
