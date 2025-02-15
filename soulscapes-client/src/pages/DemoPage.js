@@ -1,8 +1,158 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import styled, { StyleSheetManager } from 'styled-components';
+import styled, { StyleSheetManager, keyframes, css } from 'styled-components';
 import { format } from 'date-fns';
+import { Container, primitiveComponents, renderTo } from 'pixi-react';
+import * as PIXI from 'pixi.js';
 
-/* ---------------- Styled Components ---------------- */
+
+// Destructure the Graphics primitive from pixi-react's primitiveComponents.
+const { Graphics } = primitiveComponents;
+
+// ---------------- Keyframes Animations ----------------
+
+// Float: Falls from the top while oscillating.
+const floatFall = keyframes`
+  0% {
+    transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(-55vh) translateX(-20vw) rotate(10deg);
+    opacity: 0.75;
+  }
+  65% {
+    transform: translateY(-10vh) translateX(10vw) rotate(-5deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+`;
+
+// Flicker: Haunted-house light effect.
+const flicker = keyframes`
+  0% { opacity: 0.8; }
+  10% { opacity: 0.4; }
+  20% { opacity: 1; }
+  35% { opacity: 0.6; }
+  50% { opacity: 0.95; }
+  65% { opacity: 0.5; }
+  80% { opacity: 1; }
+  100% { opacity: 1; }
+`;
+
+// A simple ease-out function.
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+// ---------------- PIXI Materialize Effect ----------------
+
+/* 
+  MaterializeEffect creates a PIXI Application inside a div and uses
+  pixi-react's renderTo to draw multiple glowing dots (using Graphics)
+  that converge from random positions along the edge toward random target
+  positions within the message area.
+  
+  duration is in frames (assume ~60fps, so 120 frames ≈ 2 seconds)
+*/
+const MaterializeEffect = ({ width = 300, height = 80, duration = 120 }) => {
+  const containerRef = useRef(null);
+  const [app, setApp] = useState(null);
+  const [dots, setDots] = useState([]);
+
+  // Create PIXI Application on mount.
+  useEffect(() => {
+    if (containerRef.current) {
+      const appInstance = new PIXI.Application({ width, height, transparent: true });
+      containerRef.current.appendChild(appInstance.view);
+      setApp(appInstance);
+      return () => {
+        appInstance.destroy(true, { children: true });
+      };
+    }
+  }, [width, height]);
+
+  // Initialize dots.
+  useEffect(() => {
+    const numDots = 30;
+    const newDots = [];
+    for (let i = 0; i < numDots; i++) {
+      // Random edge: 0=top, 1=right, 2=bottom, 3=left.
+      const edge = Math.floor(Math.random() * 4);
+      let startX, startY;
+      if (edge === 0) { // top
+        startX = Math.random() * width;
+        startY = 0;
+      } else if (edge === 1) { // right
+        startX = width;
+        startY = Math.random() * height;
+      } else if (edge === 2) { // bottom
+        startX = Math.random() * width;
+        startY = height;
+      } else { // left
+        startX = 0;
+        startY = Math.random() * height;
+      }
+      const targetX = Math.random() * width;
+      const targetY = Math.random() * height;
+      newDots.push({ startX, startY, targetX, targetY, progress: 0 });
+    }
+    setDots(newDots);
+  }, [width, height]);
+
+  // Custom useTick hook.
+  const useTick = callback => {
+    useEffect(() => {
+      let lastTime = performance.now();
+      let animationFrameId;
+      const tick = (time) => {
+        const delta = time - lastTime;
+        lastTime = time;
+        callback(delta);
+        animationFrameId = requestAnimationFrame(tick);
+      };
+      animationFrameId = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(animationFrameId);
+    }, [callback]);
+  };
+
+  useTick(delta => {
+    setDots(oldDots =>
+      oldDots.map(dot => {
+        const newProgress = Math.min(dot.progress + delta / 16.67, duration);
+        return { ...dot, progress: newProgress };
+      })
+    );
+  });
+
+  if (!app) return <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, width, height }} />;
+
+  const dotElements = (
+    <Container>
+      {dots.map((dot, i) => {
+        const t = dot.progress / duration;
+        const easeT = easeOut(t);
+        const x = dot.startX + (dot.targetX - dot.startX) * easeT;
+        const y = dot.startY + (dot.targetY - dot.startY) * easeT;
+        return (
+          <Graphics
+            key={i}
+            draw={g => {
+              g.clear();
+              g.beginFill(0xffffaa, 1);
+              g.drawCircle(x, y, 3);
+              g.endFill();
+            }}
+          />
+        );
+      })}
+    </Container>
+  );
+  renderTo(app, dotElements);
+  return <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, width, height }} />;
+};
+
+// ---------------- Styled Components ----------------
 
 const ScrollerContainer = styled.div`
   width: 100%;
@@ -11,6 +161,8 @@ const ScrollerContainer = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 10px;
   padding: 0;
   margin: 0;
 `;
@@ -23,7 +175,6 @@ const ScrollableContent = styled.div`
   scroll-behavior: smooth;
   padding: 0;
   margin: 0;
-
   /* Hide scrollbar */
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -32,63 +183,73 @@ const ScrollableContent = styled.div`
   }
 `;
 
-/* ---------------- MessagePlaceholder Component ---------------- */
-/*
-  This component reserves a fixed vertical space (80px) by animating its height.
-  Meanwhile, the inner content animates its opacity and transform.
-  
-  Supported inner animations:
-    - "fade": fades in (default)
-    - "drop": drops in from the top of the screen (translateY(-100vh) to 0)
-    - "float": floats in like a leaf from off-screen (translateY(-100vh) translateX(10vw) rotate(-10deg) to 0)
-    - "zip": zips in from the side of the screen (translateX(100vw) to 0)
-  
-  Timeline:
-    - 0ms: Outer container (placeholder) starts expanding; inner content is at its initial state.
-    - 500ms: Outer container reaches full height and inner content animates to its final state.
-    - 800ms: onAnimationComplete callback is fired.
-*/
+// InnerContainer: animates message content based on the chosen animation.
+const InnerContainer = styled.div`
+  opacity: ${props => (props.animate ? 1 : props.initialOpacity)};
+  transform: ${props => (props.animate ? 'none' : props.initialTransform)};
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  ${props =>
+    props.animate &&
+    props.animationType === 'float' &&
+    css`
+      animation: ${floatFall} 2s ease-out forwards;
+    `}
+  ${props =>
+    props.animate &&
+    props.animationType === 'flicker' &&
+    css`
+      animation: ${flicker} 1s ease-out forwards;
+    `}
+`;
+
+// MessagePlaceholder reserves vertical space and triggers inner animation.
+// For "materialize" messages, it also renders the MaterializeEffect overlay.
 const MessagePlaceholder = ({
   isNew,
   animationType = 'fade',
   children,
   onAnimationComplete,
 }) => {
-  const [height, setHeight] = useState(isNew ? 0 : 'auto');
+  const [height, setHeight] = useState(isNew ? 0 : 80);
+  const [animate, setAnimate] = useState(false);
 
-  const getInitialInnerStyle = (type) => {
+  const getInitialInnerStyle = type => {
     switch (type) {
       case 'drop':
         return { opacity: 0, transform: 'translateY(-100vh)' };
       case 'float':
-        return { opacity: 0, transform: 'translateY(-100vh) translateX(10vw) rotate(-10deg)' };
+        return { opacity: 0, transform: 'translateY(-100vh) translateX(10vw) rotate(10deg)' };
       case 'zip':
         return { opacity: 0, transform: 'translateX(100vw)' };
+      case 'flicker':
+        return { opacity: 0.2, transform: 'none' };
+      case 'materialize':
+        return { opacity: 0, transform: 'none' };
       case 'fade':
       default:
         return { opacity: 0, transform: 'none' };
     }
   };
 
-  const [innerStyle, setInnerStyle] = useState(
-    isNew ? getInitialInnerStyle(animationType) : { opacity: 1, transform: 'none' }
-  );
+  const initialStyle = isNew ? getInitialInnerStyle(animationType) : { opacity: 1, transform: 'none' };
 
   useEffect(() => {
     if (isNew) {
-      // Start expanding the reserved space.
-      setHeight('80px');
-
+      setHeight(80);
       const timer1 = setTimeout(() => {
-        // After 500ms, animate the inner content into place.
-        setHeight('auto');
-        setInnerStyle({ opacity: 1, transform: 'none' });
+        setAnimate(true);
       }, 500);
-
+      const completionDelay =
+        animationType === 'float'
+          ? 2100
+          : animationType === 'flicker'
+          ? 1200
+          : animationType === 'materialize'
+          ? 2100
+          : 800;
       const timer2 = setTimeout(() => {
         if (onAnimationComplete) onAnimationComplete();
-      }, 800);
-
+      }, completionDelay);
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
@@ -97,41 +258,33 @@ const MessagePlaceholder = ({
   }, [isNew, animationType, onAnimationComplete]);
 
   return (
-    <div
-      style={{
-        height,
-        transition: 'height 0.5s ease-out',
-      }}
-    >
-      <div
-        style={{
-          ...innerStyle,
-          transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
-        }}
+    <div style={{ position: 'relative', height, transition: 'height 0.5s ease-out' }}>
+      <InnerContainer
+        animate={animate}
+        initialOpacity={initialStyle.opacity}
+        initialTransform={initialStyle.transform}
+        animationType={animationType}
       >
         {children}
-      </div>
+      </InnerContainer>
+      {animationType === 'materialize' && animate && (
+        <MaterializeEffect width={300} height={80} duration={120} />
+      )}
     </div>
   );
 };
 
-/* ---------------- EventScroller Component ---------------- */
-// Wraps its children inside a scrollable container.
-// With column-reverse, the first DOM element appears at the bottom.
+// EventScroller wraps its children in a scrollable area.
 const EventScroller = ({ children }) => {
   const scrollableContentRef = useRef(null);
-
-  // For column-reverse, scrolling to “bottom” means setting scrollTop to 0.
   const scrollToBottom = useCallback(() => {
     if (scrollableContentRef.current) {
       scrollableContentRef.current.scrollTop = 0;
     }
   }, []);
-
   useEffect(() => {
     scrollToBottom();
   }, [children, scrollToBottom]);
-
   return (
     <ScrollerContainer>
       <ScrollableContent ref={scrollableContentRef}>
@@ -141,7 +294,7 @@ const EventScroller = ({ children }) => {
   );
 };
 
-/* ---------------- Message Components ---------------- */
+// ---------------- Message Components ----------------
 
 const MessageBase = styled.div`
   padding: 10px;
@@ -151,9 +304,8 @@ const MessageBase = styled.div`
   border-radius: 8px;
   background-color: rgba(0, 0, 0, 0.5);
   position: relative;
-
   &::after {
-    content: '${(props) => props.dateTime}';
+    content: '${props => props.dateTime}';
     display: block;
     font-size: 0.7em;
     margin-top: 3px;
@@ -215,7 +367,7 @@ const MessageComponent = ({ message, dateTime }) => {
   }
 };
 
-/* ---------------- Other Page Components ---------------- */
+// ---------------- Other Page Components ----------------
 
 const Background = styled.div`
   position: fixed;
@@ -229,14 +381,12 @@ const Background = styled.div`
   z-index: -1;
 `;
 
-// The PageContainer now uses overflow:auto so the list isn’t clipped,
-// and the ButtonBar is in normal flow (not absolutely positioned).
+/* PageContainer now has no background so that the black transparent background belongs solely to the EventScroller */
 const PageContainer = styled.div`
   width: 80%;
   max-width: 800px;
   height: 80vh;
   margin: 5vh auto;
-  background-color: rgba(0, 0, 0, 0.4);
   border-radius: 10px;
   padding: 10px;
   position: relative;
@@ -245,9 +395,7 @@ const PageContainer = styled.div`
 
 const ButtonBar = styled.div`
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
   margin-bottom: 10px;
 `;
 
@@ -265,94 +413,82 @@ const StyledButton = styled.button`
 `;
 
 /* ---------------- DemoPage Component ---------------- */
-
+/* Now there's a single "Add Random Message" button.
+   Each message is assigned a random type and a random animation,
+   including the new "materialize" effect.
+*/
 const DemoPage = () => {
-  // Mapping message type to its entrance animation.
-  const getAnimationType = (messageType) => {
-    switch (messageType) {
-      case 'chat':
-        return 'fade';
-      case 'event':
-        return 'float';
-      case 'action':
-        return 'zip';
-      case 'error':
-        return 'drop';
-      default:
-        return 'fade';
-    }
-  };
+  const messageTypes = ['chat', 'event', 'action', 'error'];
+  const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
 
-  // Initial demo messages.
   const [messages, setMessages] = useState(() => {
     const now = new Date();
     const initialMessages = [];
     for (let i = 0; i < 20; i++) {
-      const randomType = Math.random();
+      const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
+      const animation = animations[Math.floor(Math.random() * animations.length)];
       const message = {
         id: i + 1,
         date: new Date(now.getTime() - i * 60000),
         isNew: false,
+        type,
+        animation,
       };
-
-      if (randomType < 0.5) {
-        message.type = 'chat';
+      if (type === 'chat') {
         message.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-        message.text = `Message ${i}: This is a demo message.`;
-      } else if (randomType < 0.7) {
-        message.type = 'event';
-        message.text = `Event ${i}: An event occurred.`;
-      } else {
-        message.type = 'action';
-        message.text = `Action ${i}: User ${Math.floor(Math.random() * 5) + 1} did something.`;
+        message.text = `Message ${i}: This is a demo chat message.`;
+      } else if (type === 'event') {
+        message.text = `Message ${i}: An event occurred.`;
+      } else if (type === 'action') {
+        message.text = `Message ${i}: An action took place.`;
+      } else if (type === 'error') {
+        message.text = `Message ${i}: Something went wrong!`;
       }
+      message.animation = animations[Math.floor(Math.random() * animations.length)];
       initialMessages.push(message);
     }
     return initialMessages;
   });
 
-  // Unique ID tracker.
   const nextIdRef = useRef(21);
 
-  // Generic function to add a message of a given type.
-  const addMessageOfType = (type) => {
+  const addRandomMessage = () => {
     const now = new Date();
+    const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
+    const animation = animations[Math.floor(Math.random() * animations.length)];
     const newMessage = {
       id: nextIdRef.current++,
       date: now,
       isNew: true,
       type,
+      animation,
     };
-
     if (type === 'chat') {
       newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
       newMessage.text = 'New Chat: This is a new chat message.';
     } else if (type === 'event') {
       newMessage.text = 'New Event: A new event occurred.';
     } else if (type === 'action') {
-      newMessage.text = `New Action: User ${Math.floor(Math.random() * 5) + 1} performed an action.`;
+      newMessage.text = 'New Action: An action just took place.';
     } else if (type === 'error') {
       newMessage.text = 'New Error: Something went wrong!';
     }
-
-    // Prepend so that new messages appear at the bottom (with column-reverse).
-    setMessages((prev) => [newMessage, ...prev]);
+    setMessages(prev => [newMessage, ...prev]);
   };
 
-  // Mark message as final once its animation is complete.
-  const markMessageAsFinal = (id) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
+  const markMessageAsFinal = id => {
+    setMessages(prev =>
+      prev.map(msg => (msg.id === id ? { ...msg, isNew: false } : msg))
     );
   };
 
-  const renderMessage = (msg) => {
+  const renderMessage = msg => {
     const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
     return (
       <MessagePlaceholder
         key={msg.id}
         isNew={msg.isNew}
-        animationType={getAnimationType(msg.type)}
+        animationType={msg.animation}
         onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
       >
         <MessageComponent message={msg} dateTime={dateTimeStr} />
@@ -361,22 +497,11 @@ const DemoPage = () => {
   };
 
   return (
-    <StyleSheetManager shouldForwardProp={(prop) => prop !== 'exiting'}>
+    <StyleSheetManager shouldForwardProp={prop => prop !== 'exiting'}>
       <Background />
-        <ButtonBar>
-          <StyledButton onClick={() => addMessageOfType('chat')}>
-            Add Chat Message
-          </StyledButton>
-          <StyledButton onClick={() => addMessageOfType('event')}>
-            Add Event Message
-          </StyledButton>
-          <StyledButton onClick={() => addMessageOfType('action')}>
-            Add Action Message
-          </StyledButton>
-          <StyledButton onClick={() => addMessageOfType('error')}>
-            Add Error Message
-          </StyledButton>
-        </ButtonBar>
+      <ButtonBar>
+        <StyledButton onClick={addRandomMessage}>Add Random Message</StyledButton>
+      </ButtonBar>
       <PageContainer>
         <EventScroller>{messages.map(renderMessage)}</EventScroller>
       </PageContainer>
