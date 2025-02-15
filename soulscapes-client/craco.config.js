@@ -1,6 +1,7 @@
 // craco.config.js
 const path = require('path');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
+const webpack = require('webpack'); // Import webpack
 
 
 module.exports = {
@@ -26,6 +27,13 @@ module.exports = {
 		    overlay: { errors: false, warnings: false },
 		};
 	    }
+
+	       // Add ProvidePlugin
+            webpackConfig.plugins.push(
+                new webpack.ProvidePlugin({
+                    PIXI: 'pixi.js', // Automatically import pixi.js and make it available as PIXI
+                })
+            );
 
 
 	    return webpackConfig;

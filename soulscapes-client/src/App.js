@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Room from "./pages/Room";
 import DemoPage from "./pages/DemoPage";
+import TestComponent from "./TestComponent";
 import ErrorOverlay from "./components/ErrorOverlay";
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
 	    )}
 	    {/* <Room/> */}
 	    <DemoPage />
+
 	</>
     );
 }

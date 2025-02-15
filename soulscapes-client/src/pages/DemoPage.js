@@ -1,12 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styled, { StyleSheetManager, keyframes, css } from 'styled-components';
 import { format } from 'date-fns';
-import { Container, primitiveComponents, renderTo } from 'pixi-react';
-import * as PIXI from 'pixi.js';
-
-
-// Destructure the Graphics primitive from pixi-react's primitiveComponents.
-const { Graphics } = primitiveComponents;
 
 // ---------------- Keyframes Animations ----------------
 
@@ -41,116 +35,6 @@ const flicker = keyframes`
   80% { opacity: 1; }
   100% { opacity: 1; }
 `;
-
-// A simple ease-out function.
-const easeOut = t => 1 - Math.pow(1 - t, 3);
-
-// ---------------- PIXI Materialize Effect ----------------
-
-/* 
-  MaterializeEffect creates a PIXI Application inside a div and uses
-  pixi-react's renderTo to draw multiple glowing dots (using Graphics)
-  that converge from random positions along the edge toward random target
-  positions within the message area.
-  
-  duration is in frames (assume ~60fps, so 120 frames ≈ 2 seconds)
-*/
-const MaterializeEffect = ({ width = 300, height = 80, duration = 120 }) => {
-  const containerRef = useRef(null);
-  const [app, setApp] = useState(null);
-  const [dots, setDots] = useState([]);
-
-  // Create PIXI Application on mount.
-  useEffect(() => {
-    if (containerRef.current) {
-      const appInstance = new PIXI.Application({ width, height, transparent: true });
-      containerRef.current.appendChild(appInstance.view);
-      setApp(appInstance);
-      return () => {
-        appInstance.destroy(true, { children: true });
-      };
-    }
-  }, [width, height]);
-
-  // Initialize dots.
-  useEffect(() => {
-    const numDots = 30;
-    const newDots = [];
-    for (let i = 0; i < numDots; i++) {
-      // Random edge: 0=top, 1=right, 2=bottom, 3=left.
-      const edge = Math.floor(Math.random() * 4);
-      let startX, startY;
-      if (edge === 0) { // top
-        startX = Math.random() * width;
-        startY = 0;
-      } else if (edge === 1) { // right
-        startX = width;
-        startY = Math.random() * height;
-      } else if (edge === 2) { // bottom
-        startX = Math.random() * width;
-        startY = height;
-      } else { // left
-        startX = 0;
-        startY = Math.random() * height;
-      }
-      const targetX = Math.random() * width;
-      const targetY = Math.random() * height;
-      newDots.push({ startX, startY, targetX, targetY, progress: 0 });
-    }
-    setDots(newDots);
-  }, [width, height]);
-
-  // Custom useTick hook.
-  const useTick = callback => {
-    useEffect(() => {
-      let lastTime = performance.now();
-      let animationFrameId;
-      const tick = (time) => {
-        const delta = time - lastTime;
-        lastTime = time;
-        callback(delta);
-        animationFrameId = requestAnimationFrame(tick);
-      };
-      animationFrameId = requestAnimationFrame(tick);
-      return () => cancelAnimationFrame(animationFrameId);
-    }, [callback]);
-  };
-
-  useTick(delta => {
-    setDots(oldDots =>
-      oldDots.map(dot => {
-        const newProgress = Math.min(dot.progress + delta / 16.67, duration);
-        return { ...dot, progress: newProgress };
-      })
-    );
-  });
-
-  if (!app) return <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, width, height }} />;
-
-  const dotElements = (
-    <Container>
-      {dots.map((dot, i) => {
-        const t = dot.progress / duration;
-        const easeT = easeOut(t);
-        const x = dot.startX + (dot.targetX - dot.startX) * easeT;
-        const y = dot.startY + (dot.targetY - dot.startY) * easeT;
-        return (
-          <Graphics
-            key={i}
-            draw={g => {
-              g.clear();
-              g.beginFill(0xffffaa, 1);
-              g.drawCircle(x, y, 3);
-              g.endFill();
-            }}
-          />
-        );
-      })}
-    </Container>
-  );
-  renderTo(app, dotElements);
-  return <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, width, height }} />;
-};
 
 // ---------------- Styled Components ----------------
 
@@ -203,7 +87,6 @@ const InnerContainer = styled.div`
 `;
 
 // MessagePlaceholder reserves vertical space and triggers inner animation.
-// For "materialize" messages, it also renders the MaterializeEffect overlay.
 const MessagePlaceholder = ({
   isNew,
   animationType = 'fade',
@@ -267,9 +150,6 @@ const MessagePlaceholder = ({
       >
         {children}
       </InnerContainer>
-      {animationType === 'materialize' && animate && (
-        <MaterializeEffect width={300} height={80} duration={120} />
-      )}
     </div>
   );
 };
@@ -375,7 +255,7 @@ const Background = styled.div`
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg/518px-Schwetzingen_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg');
+  background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg/518px-Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg');
   background-size: cover;
   background-position: center;
   z-index: -1;
@@ -418,95 +298,114 @@ const StyledButton = styled.button`
    including the new "materialize" effect.
 */
 const DemoPage = () => {
-  const messageTypes = ['chat', 'event', 'action', 'error'];
-  const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
+    const messageTypes = ['chat', 'event', 'action', 'error'];
+    const animations = ['fade', 'drop', 'zip', 'float', 'flicker'];
 
-  const [messages, setMessages] = useState(() => {
-    const now = new Date();
-    const initialMessages = [];
-    for (let i = 0; i < 20; i++) {
-      const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
-      const animation = animations[Math.floor(Math.random() * animations.length)];
-      const message = {
-        id: i + 1,
-        date: new Date(now.getTime() - i * 60000),
-        isNew: false,
-        type,
-        animation,
-      };
-      if (type === 'chat') {
-        message.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-        message.text = `Message ${i}: This is a demo chat message.`;
-      } else if (type === 'event') {
-        message.text = `Message ${i}: An event occurred.`;
-      } else if (type === 'action') {
-        message.text = `Message ${i}: An action took place.`;
-      } else if (type === 'error') {
-        message.text = `Message ${i}: Something went wrong!`;
-      }
-      message.animation = animations[Math.floor(Math.random() * animations.length)];
-      initialMessages.push(message);
-    }
-    return initialMessages;
-  });
+    const [messages, setMessages] = useState(() => {
+        const now = new Date();
+        const initialMessages = [];
+        for (let i = 0; i < 20; i++) {
+            const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
+            const animation = animations[Math.floor(Math.random() * animations.length)];
+            const message = {
+                id: i + 1,
+                date: new Date(now.getTime() - i * 60000),
+                isNew: false,
+                type,
+                animation,
+            };
+            if (type === 'chat') {
+                message.user = `User ${Math.floor(Math.random() * 5) + 1}`;
+                message.text = `Message ${i}: This is a demo chat message.`;
+            } else if (type === 'event') {
+                message.text = `Message ${i}: An event occurred.`;
+            } else if (type === 'action') {
+                message.text = `Message ${i}: An action took place.`;
+            } else if (type === 'error') {
+                message.text = `Message ${i}: Something went wrong!`;
+            }
+            message.animation = animations[Math.floor(Math.random() * animations.length)];
+            initialMessages.push(message);
+        }
+        return initialMessages;
+    });
 
-  const nextIdRef = useRef(21);
+    const nextIdRef = useRef(21);
 
-  const addRandomMessage = () => {
-    const now = new Date();
-    const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
-    const animation = animations[Math.floor(Math.random() * animations.length)];
-    const newMessage = {
-      id: nextIdRef.current++,
-      date: now,
-      isNew: true,
-      type,
-      animation,
+    const [selectedType, setSelectedType] = useState(messageTypes[0]);
+    const [selectedAnimation, setSelectedAnimation] = useState(animations[0]);
+
+    const addRandomMessage = () => {
+        const now = new Date();
+        const newMessage = {
+            id: nextIdRef.current++,
+            date: now,
+            isNew: true,
+            type: selectedType, // Use selected type
+            animation: selectedAnimation, // Use selected animation
+        };
+        if (selectedType === 'chat') {
+            newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
+            newMessage.text = 'New Chat: This is a new chat message.';
+        } else if (selectedType === 'event') {
+            newMessage.text = 'New Event: A new event occurred.';
+        } else if (selectedType === 'action') {
+            newMessage.text = 'New Action: An action just took place.';
+        } else if (selectedType === 'error') {
+            newMessage.text = 'New Error: Something went wrong!';
+        }
+        setMessages(prev => [newMessage, ...prev]);
     };
-    if (type === 'chat') {
-      newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-      newMessage.text = 'New Chat: This is a new chat message.';
-    } else if (type === 'event') {
-      newMessage.text = 'New Event: A new event occurred.';
-    } else if (type === 'action') {
-      newMessage.text = 'New Action: An action just took place.';
-    } else if (type === 'error') {
-      newMessage.text = 'New Error: Something went wrong!';
-    }
-    setMessages(prev => [newMessage, ...prev]);
-  };
 
-  const markMessageAsFinal = id => {
-    setMessages(prev =>
-      prev.map(msg => (msg.id === id ? { ...msg, isNew: false } : msg))
-    );
-  };
+    const markMessageAsFinal = id => {
+        setMessages(prev =>
+            prev.map(msg => (msg.id === id ? { ...msg, isNew: false } : msg))
+        );
+    };
 
-  const renderMessage = msg => {
-    const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
+    const renderMessage = msg => {
+        const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
+        return (
+            <MessagePlaceholder
+                key={msg.id}
+                isNew={msg.isNew}
+                animationType={msg.animation}
+                onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
+            >
+                <MessageComponent message={msg} dateTime={dateTimeStr} />
+            </MessagePlaceholder>
+        );
+    };
+
     return (
-      <MessagePlaceholder
-        key={msg.id}
-        isNew={msg.isNew}
-        animationType={msg.animation}
-        onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
-      >
-        <MessageComponent message={msg} dateTime={dateTimeStr} />
-      </MessagePlaceholder>
+        <StyleSheetManager shouldForwardProp={prop => prop !== 'exiting'}>
+            <Background />
+            <ButtonBar style={{ flexDirection: 'column' }}>
+                <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
+                    <select
+                        value={selectedType}
+                        onChange={e => setSelectedType(e.target.value)}
+                    >
+                        {messageTypes.map(type => (
+                            <option key={type} value={type}>{type}</option>
+                        ))}
+                    </select>
+                    <select
+                        value={selectedAnimation}
+                        onChange={e => setSelectedAnimation(e.target.value)}
+                    >
+                        {animations.map(animation => (
+                            <option key={animation} value={animation}>{animation}</option>
+                        ))}
+                    </select>
+                </div>
+                <StyledButton onClick={addRandomMessage}>Add Message</StyledButton>
+            </ButtonBar>
+            <PageContainer>
+                <EventScroller>{messages.map(renderMessage)}</EventScroller>
+            </PageContainer>
+        </StyleSheetManager>
     );
-  };
-
-  return (
-    <StyleSheetManager shouldForwardProp={prop => prop !== 'exiting'}>
-      <Background />
-      <ButtonBar>
-        <StyledButton onClick={addRandomMessage}>Add Random Message</StyledButton>
-      </ButtonBar>
-      <PageContainer>
-        <EventScroller>{messages.map(renderMessage)}</EventScroller>
-      </PageContainer>
-    </StyleSheetManager>
-  );
 };
 
 export default DemoPage;
