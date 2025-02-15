@@ -1,6 +1,7 @@
 // src/App.js
 import React, { useState, useEffect } from "react";
 import Room from "./pages/Room";
+import DemoPage from "./pages/DemoPage";
 import ErrorOverlay from "./components/ErrorOverlay";
 
 function App() {
@@ -38,7 +39,8 @@ function App() {
 		    onClose={() => setGlobalError(null)}
 		/>
 	    )}
-	    <Room />
+	    {/* <Room/> */}
+	    <DemoPage />
 	</>
     );
 }

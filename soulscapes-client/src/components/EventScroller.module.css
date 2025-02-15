@@ -1,0 +1,59 @@
+/* EventScroller.css */
+.event-scroller-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.event-scroller {
+  flex: 1;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  padding: 10px;
+}
+
+.event-item {
+  margin-bottom: 10px;
+  opacity: 0;
+  animation: fadeIn 0.5s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.date-marker {
+  text-align: center;
+  margin: 10px 0;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.scroll-indicator {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  z-index: 1;
+}
+
+.scroll-indicator.top {
+  top: 10px;
+}
+
+.scroll-indicator.bottom {
+  bottom: 10px;
+}

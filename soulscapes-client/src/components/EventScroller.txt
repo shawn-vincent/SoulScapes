@@ -1,0 +1,82 @@
+
+
+
+/* Initial prompt:
+
+   ----
+   COMPONENT
+   
+   Write a React component (named EventScroller) that lays out its
+   child components in the style of a traditional chat interface.
+   That is, a vertically (up/down) scrolling region that, instead of
+   being anchored to the top of the scolling region and scrolling
+   down, it is anchored to the bottom of the scrolling region and
+   scrolls up.  The intent is to have a forward-chronologically-sorted
+   list that defaults the user to see the latest elements.
+
+   Specifically, if there is a list of elements shorter than the viewable
+   area, it will be anchored to the bottom of the viewable area.  No
+   scrolling is possible until the content becomes larger than the
+   viewable area.
+
+   If the list of elements becomes taller than the viewable area, then by
+   default the content is anchored to the bottom of the viewable area and
+   allows the user to scroll up to see older items.
+
+   The component should allow lazy loading of an arbitrarily long list in
+   the backwards direction.
+
+   The components should provide some kind of 'date' interface.  These
+   dates are used to render natural and subtle date markers in the
+   scrolling region - day/month/year.  This functionality is optional and
+   configurable..
+
+   Scrolling should be smooth.
+
+   When adding a new item (placed in the list according to its date
+   property, or at the end of the list if it doesn't have a date
+   propery), space should open up at the insertion point(smoothly), and
+   then the item should fade into visibility.  Removal should animate in
+   the reverse direction.  This movement should be organic and natural.
+   During these transitions. the scroll position should behave
+   intuitively (throughout the animated addition of elements, the scroll
+   position at the bottom of the viewable area should remain fixed (so
+   elements above the insertion point will scroll UP as space is created
+   and items are added, and DOWN as items are removed.
+
+   black semitransparent rounded bars with appropriate arrows appear at
+   the top and bottom of the list if the content CAN be scrolled in that
+   direction.
+
+   The background of the component should be transparent.
+
+   The component should occupy all avilable space in its containing
+   element.
+
+   ----
+   DEMO:
+
+   ALSO write a basic single-file React page with example content to
+   demo this new component.  The dmeo should have a full screen
+   background image of a natural scene.  The demo content should be:
+
+   1. a list of messages from various users, with a nice rendering of
+   the demo chat message UI, interspersed with
+
+   2. events that represent groups of summarized messages,
+   interspersed with
+
+   3. events of users taking actions (entering/leaving chat, and other
+   user-specified actions, like a role play
+
+   The demo should start with 20 events, and there should be an add
+   button that adds new random items, 80% to the end of the list, and
+   20% to the middle of the list.
+
+   ----
+   Please implement ALL specified functionality, leaving none of it
+   for future enhancements.  Please write good comments.  Please
+   carefully double check your code for edge cases and potential
+   issues and preemptively fix them.
+   
+*/

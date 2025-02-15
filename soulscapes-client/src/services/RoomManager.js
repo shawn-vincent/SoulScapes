@@ -6,6 +6,8 @@ import remoteAvatarManager from "./RemoteAvatarManager";
 
 class RoomManager {
     constructor() {
+	slog("🚀 Connecting to server");
+	
 	this.socket = io("/rooms", {
 	    reconnection: true,
 	    reconnectionAttempts: 10,
