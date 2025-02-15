@@ -4,7 +4,6 @@ import { format } from 'date-fns';
 
 /* ---------------- Styled Components ---------------- */
 
-// Outer container for the scroller
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -16,7 +15,6 @@ const ScrollerContainer = styled.div`
   margin: 0;
 `;
 
-// Scrollable area with column-reverse so that the first DOM element appears at the bottom.
 const ScrollableContent = styled.div`
   flex: 1;
   display: flex;
@@ -36,9 +34,9 @@ const ScrollableContent = styled.div`
 
 /* ---------------- MessagePlaceholder Component ---------------- */
 /*
-  This component always reserves the same vertical space (targetHeight).
+  Always reserves the same vertical space (targetHeight).
   If isNew is true, it starts with height 0 and opacity 0,
-  then animates its height to targetHeight over 0.5 s and fades in its children over 0.3 s.
+  then animates its height to targetHeight over 0.5s and fades in its children over 0.3s.
   When the animation is complete, it calls onAnimationComplete.
 */
 const MessagePlaceholder = ({ isNew, children, onAnimationComplete }) => {
@@ -46,36 +44,38 @@ const MessagePlaceholder = ({ isNew, children, onAnimationComplete }) => {
   const [opacity, setOpacity] = useState(isNew ? 0 : 1);
 
   useEffect(() => {
-    if (isNew) {
-      // Trigger height expansion immediately.
+    if (!isNew) return;
+
+    // Trigger height expansion immediately.
+    setHeight('80px');
+
+    const timer1 = setTimeout(() => {
       setHeight('auto');
-      // After 0.5 s, start fading in.
-      const timer1 = setTimeout(() => {
-        setOpacity(1);
-      }, 500);
-      // After a total of 0.8 s, notify that the animation is complete.
-      const timer2 = setTimeout(() => {
-        if (onAnimationComplete) {
-          onAnimationComplete();
-        }
-      }, 800);
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
-    }
+      setOpacity(1);
+    }, 500);
+
+    const timer2 = setTimeout(() => {
+      if (onAnimationComplete) {
+        onAnimationComplete();
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
   }, [isNew, onAnimationComplete]);
 
   return (
     <div
       style={{
-        height: height,
+        height,
         transition: 'height 0.5s ease-out'
       }}
     >
       <div
         style={{
-          opacity: opacity,
+          opacity,
           transition: 'opacity 0.3s ease-out'
         }}
       >
@@ -86,10 +86,9 @@ const MessagePlaceholder = ({ isNew, children, onAnimationComplete }) => {
 };
 
 /* ---------------- EventScroller Component ---------------- */
-// This component wraps its children inside a scrollable container.
+// Wraps its children inside a scrollable container.
 // With column-reverse, the first DOM element appears at the bottom.
 const EventScroller = ({ children }) => {
-  const containerRef = useRef(null);
   const scrollableContentRef = useRef(null);
 
   // For column-reverse, scrolling to “bottom” means setting scrollTop to 0.
@@ -104,7 +103,7 @@ const EventScroller = ({ children }) => {
   }, [children, scrollToBottom]);
 
   return (
-    <ScrollerContainer ref={containerRef}>
+    <ScrollerContainer>
       <ScrollableContent ref={scrollableContentRef}>
         {children}
       </ScrollableContent>
@@ -113,7 +112,7 @@ const EventScroller = ({ children }) => {
 };
 
 /* ---------------- Message Components ---------------- */
-// Base style for a message.
+
 const MessageBase = styled.div`
   padding: 10px;
   margin: 10px 10px;
@@ -124,7 +123,7 @@ const MessageBase = styled.div`
   position: relative;
 
   &::after {
-    content: '${props => props.dateTime}';
+    content: '${(props) => props.dateTime}';
     display: block;
     font-size: 0.7em;
     margin-top: 3px;
@@ -177,6 +176,7 @@ const MessageComponent = ({ message, dateTime }) => {
 };
 
 /* ---------------- Other Page Components ---------------- */
+
 const Background = styled.div`
   position: fixed;
   top: 0;
@@ -227,83 +227,79 @@ const StyledButton = styled.button`
 `;
 
 /* ---------------- DemoPage Component ---------------- */
+
 const DemoPage = () => {
-  // We'll keep messages in an array.
-  // Use a unique id for each message.
+  // Initialize 20 demo messages.
   const [messages, setMessages] = useState(() => {
     const now = new Date();
-    const initial = [];
+    const initialMessages = [];
     for (let i = 0; i < 20; i++) {
       const randomType = Math.random();
-      const msg = {
+      const message = {
         id: i + 1,
         date: new Date(now.getTime() - i * 60000),
-        isNew: false
+        isNew: false,
       };
+
       if (randomType < 0.6) {
-        msg.type = 'chat';
-        msg.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-        msg.text = `Message ${i}: This is a demo message.`;
+        message.type = 'chat';
+        message.user = `User ${Math.floor(Math.random() * 5) + 1}`;
+        message.text = `Message ${i}: This is a demo message.`;
       } else if (randomType < 0.8) {
-        msg.type = 'event';
-        msg.text = `Event ${i}: An event occurred.`;
+        message.type = 'event';
+        message.text = `Event ${i}: An event occurred.`;
       } else {
-        msg.type = 'action';
-        msg.text = `Action ${i}: User ${Math.floor(Math.random() * 5) + 1} did something.`;
+        message.type = 'action';
+        message.text = `Action ${i}: User ${Math.floor(Math.random() * 5) + 1} did something.`;
       }
-      initial.push(msg);
+      initialMessages.push(message);
     }
-    return initial;
+    return initialMessages;
   });
 
-  // Use a ref to track the next unique ID.
+  // Track the next unique ID.
   const nextIdRef = useRef(21);
 
-  // When adding a message, merge it immediately into the list with isNew true.
+  // Add a new message with isNew true.
   const addMessage = () => {
     const now = new Date();
     const randomType = Math.random();
-    const newMsg = {
+    const newMessage = {
       id: nextIdRef.current++,
       date: now,
-      isNew: true
+      isNew: true,
     };
+
     if (randomType < 0.6) {
-      newMsg.type = 'chat';
-      newMsg.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-      newMsg.text = 'New Message: This is a new demo message.';
+      newMessage.type = 'chat';
+      newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
+      newMessage.text = 'New Message: This is a new demo message.';
     } else if (randomType < 0.8) {
-      newMsg.type = 'event';
-      newMsg.text = 'New Event: A new event occurred.';
+      newMessage.type = 'event';
+      newMessage.text = 'New Event: A new event occurred.';
     } else {
-      newMsg.type = 'action';
-      newMsg.text = `New Action: User ${Math.floor(Math.random() * 5) + 1} performed a new action.`;
+      newMessage.type = 'action';
+      newMessage.text = `New Action: User ${Math.floor(Math.random() * 5) + 1} performed a new action.`;
     }
-    // Prepend new messages so that they appear at the bottom (with column-reverse).
-    setMessages(prev => [newMsg, ...prev]);
+
+    // Prepend new messages so they appear at the bottom (with column-reverse).
+    setMessages((prev) => [newMessage, ...prev]);
   };
 
-  // When a message's animation completes, update its isNew flag.
+  // Update a message once its animation is complete.
   const markMessageAsFinal = (id) => {
-    setMessages(prev =>
-      prev.map(msg =>
-        msg.id === id ? { ...msg, isNew: false } : msg
-      )
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
     );
   };
 
-  // Render every message wrapped in a MessagePlaceholder.
-  const renderMessage = (msg, index) => {
+  const renderMessage = (msg) => {
     const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
     return (
       <MessagePlaceholder
         key={msg.id}
         isNew={msg.isNew}
-        onAnimationComplete={() => {
-          if (msg.isNew) {
-            markMessageAsFinal(msg.id);
-          }
-        }}
+        onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
       >
         <MessageComponent message={msg} dateTime={dateTimeStr} />
       </MessagePlaceholder>
@@ -318,7 +314,7 @@ const DemoPage = () => {
           <StyledButton onClick={addMessage}>Add Message</StyledButton>
         </ButtonBar>
         <EventScroller>
-          {messages.map((msg) => renderMessage(msg))}
+          {messages.map(renderMessage)}
         </EventScroller>
       </PageContainer>
     </StyleSheetManager>
