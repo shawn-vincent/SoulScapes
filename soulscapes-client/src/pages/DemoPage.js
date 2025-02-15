@@ -16,7 +16,7 @@ const ScrollerContainer = styled.div`
   margin: 0;
 `;
 
-// Scrollable area with column-reverse layout so that new items appear at the bottom.
+// Scrollable area with column-reverse so that the first DOM element appears at the bottom.
 const ScrollableContent = styled.div`
   flex: 1;
   display: flex;
@@ -34,70 +34,60 @@ const ScrollableContent = styled.div`
   }
 `;
 
-// Wraps existing messages.
-const AnimatedItem = styled.div`
-  margin-bottom: 5px;
-  opacity: ${(props) => (props.$isNew ? 0 : 1)};
-  xtransform: translateY(${(props) => (props.$isNew ? '10px' : '0')});
-  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
-`;
-
-/* 
-  Combined new message component:
-  It starts with a height of 0 and then grows to the target height over 0.5s.
-  Once grown, its content fades in (over 0.3s) without any translateY.
+/* ---------------- MessagePlaceholder Component ---------------- */
+/*
+  This component always reserves the same vertical space (targetHeight).
+  If isNew is true, it starts with height 0 and opacity 0,
+  then animates its height to targetHeight over 0.5 s and fades in its children over 0.3 s.
+  When the animation is complete, it calls onAnimationComplete.
 */
-const AnimatedNewMessageContainer = styled.div`
-  height: ${(props) => (props.hasGrown ? `${props.height}px` : '0px')};
-  transition: height 0.5s ease-out;
-  overflow: hidden;
-  margin-bottom: 5px;
-`;
-
-const AnimatedMessageContent = styled.div`
-  opacity: ${(props) => (props.visible ? 1 : 0)};
-  transition: opacity 0.3s ease-out;
-`;
-
-const AnimatedNewMessage = ({ message, dateTime, height, onAnimationComplete }) => {
-  const [hasGrown, setHasGrown] = useState(false);
-  const [contentVisible, setContentVisible] = useState(false);
+const MessagePlaceholder = ({ isNew, children, onAnimationComplete }) => {
+  const [height, setHeight] = useState(isNew ? 0 : 'auto');
+  const [opacity, setOpacity] = useState(isNew ? 0 : 1);
 
   useEffect(() => {
-    // Trigger height expansion immediately.
-    setHasGrown(true);
-
-    // After 0.5s (the height transition), fade in the content.
-    const fadeTimer = setTimeout(() => {
-      setContentVisible(true);
-    }, 500);
-
-    // After both animations complete (0.5s + 0.3s = 0.8s), call the callback.
-    const completeTimer = setTimeout(() => {
-      if (onAnimationComplete) {
-        onAnimationComplete();
-      }
-    }, 800);
-
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(completeTimer);
-    };
-  }, [onAnimationComplete]);
+    if (isNew) {
+      // Trigger height expansion immediately.
+      setHeight('auto');
+      // After 0.5 s, start fading in.
+      const timer1 = setTimeout(() => {
+        setOpacity(1);
+      }, 500);
+      // After a total of 0.8 s, notify that the animation is complete.
+      const timer2 = setTimeout(() => {
+        if (onAnimationComplete) {
+          onAnimationComplete();
+        }
+      }, 800);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [isNew, onAnimationComplete]);
 
   return (
-    <AnimatedNewMessageContainer hasGrown={hasGrown} height={height}>
-      <AnimatedMessageContent visible={contentVisible}>
-        <MessageComponent message={message} dateTime={dateTime} />
-      </AnimatedMessageContent>
-    </AnimatedNewMessageContainer>
+    <div
+      style={{
+        height: height,
+        transition: 'height 0.5s ease-out'
+      }}
+    >
+      <div
+        style={{
+          opacity: opacity,
+          transition: 'opacity 0.3s ease-out'
+        }}
+      >
+        {children}
+      </div>
+    </div>
   );
 };
 
 /* ---------------- EventScroller Component ---------------- */
-
-// Wraps its children inside a scrollable container.
-// With column-reverse, new items added first appear at the bottom.
+// This component wraps its children inside a scrollable container.
+// With column-reverse, the first DOM element appears at the bottom.
 const EventScroller = ({ children }) => {
   const containerRef = useRef(null);
   const scrollableContentRef = useRef(null);
@@ -116,22 +106,17 @@ const EventScroller = ({ children }) => {
   return (
     <ScrollerContainer ref={containerRef}>
       <ScrollableContent ref={scrollableContentRef}>
-        {React.Children.map(children, (child, index) => (
-          <AnimatedItem key={index} $isNew={false}>
-            {child}
-          </AnimatedItem>
-        ))}
+        {children}
       </ScrollableContent>
     </ScrollerContainer>
   );
 };
 
 /* ---------------- Message Components ---------------- */
-
-// Base style for a message (each message shows its own timestamp via the ::after pseudo-element)
+// Base style for a message.
 const MessageBase = styled.div`
   padding: 10px;
-  margin: 5px 10px;
+  margin: 10px 10px;
   color: white;
   font-size: 1em;
   border-radius: 8px;
@@ -139,7 +124,7 @@ const MessageBase = styled.div`
   position: relative;
 
   &::after {
-    content: '${(props) => props.dateTime}';
+    content: '${props => props.dateTime}';
     display: block;
     font-size: 0.7em;
     margin-top: 3px;
@@ -149,7 +134,7 @@ const MessageBase = styled.div`
 `;
 
 const ChatMessage = styled(MessageBase)`
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.4);
   max-width: 70%;
   align-self: flex-start;
 `;
@@ -158,9 +143,9 @@ const EventMessage = styled(MessageBase)`
   text-align: center;
   color: #aaa;
   font-size: 0.9em;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.4);
   border-radius: 4px;
-  margin: 5px auto;
+  margin: 10px auto;
   width: fit-content;
 `;
 
@@ -168,13 +153,12 @@ const ActionMessage = styled(MessageBase)`
   text-align: center;
   color: #ddd;
   font-size: 0.9em;
-  background-color: rgba(123, 0, 255, 0.2);
+  background-color: rgba(123, 0, 255, 0.4);
   border-radius: 4px;
-  margin: 5px auto;
+  margin: 10px auto;
   width: fit-content;
 `;
 
-// Renders a message based on its type.
 const MessageComponent = ({ message, dateTime }) => {
   switch (message.type) {
     case 'chat':
@@ -193,7 +177,6 @@ const MessageComponent = ({ message, dateTime }) => {
 };
 
 /* ---------------- Other Page Components ---------------- */
-
 const Background = styled.div`
   position: fixed;
   top: 0;
@@ -238,22 +221,25 @@ const StyledButton = styled.button`
   border-radius: 4px;
   cursor: pointer;
   font-size: 1em;
-
   &:hover {
     background-color: rgba(0, 123, 255, 0.9);
   }
 `;
 
 /* ---------------- DemoPage Component ---------------- */
-
 const DemoPage = () => {
-  // Create 20 initial messages (newest first) so that column-reverse displays them with the newest at the bottom.
+  // We'll keep messages in an array.
+  // Use a unique id for each message.
   const [messages, setMessages] = useState(() => {
     const now = new Date();
     const initial = [];
     for (let i = 0; i < 20; i++) {
       const randomType = Math.random();
-      const msg = { date: new Date(now.getTime() - i * 60000) };
+      const msg = {
+        id: i + 1,
+        date: new Date(now.getTime() - i * 60000),
+        isNew: false
+      };
       if (randomType < 0.6) {
         msg.type = 'chat';
         msg.user = `User ${Math.floor(Math.random() * 5) + 1}`;
@@ -270,15 +256,18 @@ const DemoPage = () => {
     return initial;
   });
 
-  // newMessage holds the message that is being animated in.
-  const [newMessage, setNewMessage] = useState(null);
-  // Estimate the height of a new message (in pixels)
-  const itemHeight = 50;
+  // Use a ref to track the next unique ID.
+  const nextIdRef = useRef(21);
 
+  // When adding a message, merge it immediately into the list with isNew true.
   const addMessage = () => {
     const now = new Date();
     const randomType = Math.random();
-    const newMsg = { date: now };
+    const newMsg = {
+      id: nextIdRef.current++,
+      date: now,
+      isNew: true
+    };
     if (randomType < 0.6) {
       newMsg.type = 'chat';
       newMsg.user = `User ${Math.floor(Math.random() * 5) + 1}`;
@@ -290,22 +279,34 @@ const DemoPage = () => {
       newMsg.type = 'action';
       newMsg.text = `New Action: User ${Math.floor(Math.random() * 5) + 1} performed a new action.`;
     }
-    setNewMessage(newMsg);
+    // Prepend new messages so that they appear at the bottom (with column-reverse).
+    setMessages(prev => [newMsg, ...prev]);
   };
 
-  // When the new message animation completes, merge it into the list.
-  const handleNewMessageComplete = () => {
-    setMessages((prev) => [newMessage, ...prev]);
-    setNewMessage(null);
+  // When a message's animation completes, update its isNew flag.
+  const markMessageAsFinal = (id) => {
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.id === id ? { ...msg, isNew: false } : msg
+      )
+    );
   };
 
-  // Render an existing message.
+  // Render every message wrapped in a MessagePlaceholder.
   const renderMessage = (msg, index) => {
     const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
     return (
-      <AnimatedItem key={index} $isNew={false}>
+      <MessagePlaceholder
+        key={msg.id}
+        isNew={msg.isNew}
+        onAnimationComplete={() => {
+          if (msg.isNew) {
+            markMessageAsFinal(msg.id);
+          }
+        }}
+      >
         <MessageComponent message={msg} dateTime={dateTimeStr} />
-      </AnimatedItem>
+      </MessagePlaceholder>
     );
   };
 
@@ -317,15 +318,7 @@ const DemoPage = () => {
           <StyledButton onClick={addMessage}>Add Message</StyledButton>
         </ButtonBar>
         <EventScroller>
-          {newMessage && (
-            <AnimatedNewMessage
-              message={newMessage}
-              dateTime={format(newMessage.date, 'MMM dd, yyyy HH:mm')}
-              height={itemHeight}
-              onAnimationComplete={handleNewMessageComplete}
-            />
-          )}
-          {messages.map((msg, index) => renderMessage(msg, index))}
+          {messages.map((msg) => renderMessage(msg))}
         </EventScroller>
       </PageContainer>
     </StyleSheetManager>
