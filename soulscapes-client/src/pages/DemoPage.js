@@ -14,15 +14,16 @@ import {
 } from 'date-fns';
 import * as PIXI from 'pixi.js';
 
-//
-// ----- Configuration (same as before) -----
-//
+// ---------------- Constants for fade + materialize durations ----------------
+const FADE_DURATION_S = 2.0; // e.g. 2 seconds for the fade
+const MATERIALIZE_DURATION_MS = FADE_DURATION_S * 1000 / 2; 
+// => 1000 ms (1 second) = half the fade duration
+
+// ---------------- Configuration ----------------
 const messageTypes = ['chat', 'event', 'action', 'error'];
 const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
 
-//
-// ----- Keyframe Animations (same as before) -----
-//
+// ---------------- Keyframe Animations ----------------
 const floatFall = keyframes`
   0% {
     transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
@@ -69,9 +70,7 @@ const flicker = keyframes`
   }
 `;
 
-//
-// ----- Styled Components (mostly same as before) -----
-//
+// ---------------- Styled Components ----------------
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -101,9 +100,7 @@ const ScrollableContent = styled.div`
   }
 `;
 
-//
-// ----- The updated MessagePlaceholder with `materialize` fix -----
-//
+// ---------------- MessagePlaceholder ----------------
 const MessagePlaceholder = ({
   isNew,
   animationType,
@@ -115,7 +112,7 @@ const MessagePlaceholder = ({
   const [pixiActive, setPixiActive] = useState(false);
   const containerRef = useRef(null);
 
-  // --- initialStyle same as before ---
+  // Initial style for message content before/after animation
   const initialStyle = useMemo(() => {
     const getInitialInnerStyle = (type) => {
       switch (type) {
@@ -138,40 +135,37 @@ const MessagePlaceholder = ({
       }
     };
 
-    return isNew ? getInitialInnerStyle(animationType) : { opacity: 1, transform: 'none' };
+    return isNew
+      ? getInitialInnerStyle(animationType)
+      : { opacity: 1, transform: 'none' };
   }, [isNew, animationType]);
 
-  // --- startAnimation same as before, except we setPixiActive for 'materialize' ---
+  // Start the animation
   const startAnimation = useCallback(() => {
+    // Expand the placeholder
     setHeight(80);
 
+    // If materialize, turn on the dot effect
     if (animationType === 'materialize') {
       setPixiActive(true);
     }
 
-    const timer1 = setTimeout(() => {
-      setAnimate(true);
-    }, 500);
+    // Begin fade & transform right away
+    setAnimate(true);
 
+    // Overall fade/animation time
     const completionDelay =
-      animationType === 'float'
-        ? 2100
-        : animationType === 'flicker'
-        ? 1200
-        : animationType === 'materialize'
-        ? 2100
-        : 800;
+      animationType === 'materialize'
+        ? MATERIALIZE_DURATION_MS // use the constant
+        : 800; // or other fallback timing
 
-    const timer2 = setTimeout(() => {
+    // Once time is up, do final callback + turn off effect
+    const timer = setTimeout(() => {
       if (onAnimationComplete) onAnimationComplete();
-      // We stop the pixi effect after the animation is complete
       setPixiActive(false);
     }, completionDelay);
 
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
+    return () => clearTimeout(timer);
   }, [animationType, onAnimationComplete]);
 
   useEffect(() => {
@@ -180,25 +174,22 @@ const MessagePlaceholder = ({
     }
   }, [isNew, startAnimation]);
 
-  //
-  // ----- MaterializeEffect: now uses Sprite instead of Graphics -----
-  //
+  // ------------ MaterializeEffect that runs for MATERIALIZE_DURATION_MS ------------
   const MaterializeEffect = ({
-    duration = 2100,
+    duration = MATERIALIZE_DURATION_MS, // from the constant
     dotColor = 0xffffff,
-    dotInnerRadius = 2,
-    dotOuterRadiusMultiplier = 3,
+    dotInnerRadius = 0.8,
+    dotOuterRadiusMultiplier = 2,
   }) => {
     const pixiApp = useRef(window.pixiApp);
     const dots = useRef(window.dots);
     const dotPool = useRef([]);
 
-    // Instead of fully destroying the container, we just removeChildren
+    // Just remove children, don't destroy the container
     const cleanupDots = useCallback(() => {
       if (dots.current) {
-        dots.current.removeChildren(); // empty the container
+        dots.current.removeChildren();
       }
-      // Destroy any sprites we created
       dotPool.current.forEach((sprite) => {
         if (sprite && sprite.destroy) {
           sprite.destroy();
@@ -206,154 +197,155 @@ const MessagePlaceholder = ({
       });
       dotPool.current = [];
     }, []);
-// Inside your MaterializeEffect component:
-useEffect(() => {
-  let animationFrameId;
-  if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
-    const totalDots = 300;
-    const maxDelay = duration * 0.5;
-    const dotsData = [];
 
-    // 1) Get the center of the message in *DOM* coords
-    const getTargetCoordinates = () => {
-      // Fallback if no container
-      if (!containerRef.current) return { x: 0, y: 0 };
+    useEffect(() => {
+      let animationFrameId;
+      if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
+        // Convert DOM coords -> PIXI coords
+        const getTargetCoordinates = () => {
+          // We'll measure the entire placeholder container
+          const rect = containerRef.current.getBoundingClientRect();
+          const msgCenterX = rect.left + rect.width / 2;
+          const msgCenterY = rect.top + rect.height / 2;
 
-      const messageElem = containerRef.current.firstElementChild;
-      const rect = messageElem
-        ? messageElem.getBoundingClientRect()
-        : containerRef.current.getBoundingClientRect();
+          // mapPositionToPoint handles scrolling/offset
+          const point = new PIXI.Point();
+          pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
+            point,
+            msgCenterX,
+            msgCenterY
+          );
+          return { x: point.x, y: point.y };
+        };
 
-      const msgCenterX = rect.left + rect.width / 2;
-      const msgCenterY = rect.top + rect.height / 2;
+        const { x: targetX, y: targetY } = getTargetCoordinates();
 
-      // 2) Convert DOM coords --> PIXI coords:
-      // "mapPositionToPoint" accounts for scrolling, canvas offset, etc.
-      const point = new PIXI.Point();
-      pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
-        point,
-        msgCenterX,
-        msgCenterY
-      );
-      return { x: point.x, y: point.y };
-    };
+        // We'll spawn a bunch of dots
+        const totalDots = 800; 
+        // short random start delays so it doesn't all happen at once
+        const maxDelay = duration * 0.2; // 20% of the overall time is random delay
+        const dotsData = [];
 
-    const { x: targetX, y: targetY } = getTargetCoordinates();
+        const circleRadius = Math.max(
+          pixiApp.current.renderer.width,
+          pixiApp.current.renderer.height
+        ) * 1.0; // you can tweak this to fill the screen
 
-    // 3) Precompute random spawn positions in a big circle around target
-    // (in the *same* PIXI coordinate space).
-    const circleRadius = Math.max(
-      pixiApp.current.renderer.width,
-      pixiApp.current.renderer.height
-    ) * 1.2;
-
-    for (let i = 0; i < totalDots; i++) {
-      const angle = Math.random() * 2 * Math.PI;
-      const r = Math.sqrt(Math.random()) * circleRadius;
-      const startX = targetX + r * Math.cos(angle);
-      const startY = targetY + r * Math.sin(angle);
-      const delay = Math.random() * maxDelay;
-      const innerRadius = dotInnerRadius + Math.random() * 2;
-      dotsData.push({ startX, startY, delay, innerRadius });
-    }
-
-    const startTime = performance.now();
-
-    const animateDots = () => {
-      const elapsed = performance.now() - startTime;
-
-      for (let i = 0; i < totalDots; i++) {
-        let dotSprite = dotPool.current[i];
-        if (!dotSprite) {
-          dotSprite = new PIXI.Sprite(window.circleTexture);
-          dotSprite.anchor.set(0.5);
-          dotPool.current[i] = dotSprite;
+        // Precompute random spawn positions
+        for (let i = 0; i < totalDots; i++) {
+          const angle = Math.random() * 2 * Math.PI;
+          const r = Math.sqrt(Math.random()) * circleRadius;
+          const startX = targetX + r * Math.cos(angle);
+          const startY = targetY + r * Math.sin(angle);
+          const delay = Math.random() * maxDelay;
+          const innerR = dotInnerRadius + Math.random() * 0.3; // slight variation
+          dotsData.push({ startX, startY, delay, innerR });
         }
 
-        const dotData = dotsData[i];
-        const localTime = elapsed - dotData.delay;
-        if (localTime < 0) {
-          // not started yet
-          if (dotSprite.parent) dots.current.removeChild(dotSprite);
-          continue;
-        }
+        const startTime = performance.now();
 
-        const progress = Math.min(1, localTime / (duration - dotData.delay));
-        const alpha = 1 - progress;
-        const currentX = dotData.startX + progress * (targetX - dotData.startX);
-        const currentY = dotData.startY + progress * (targetY - dotData.startY);
+        const animateDots = () => {
+          const elapsed = performance.now() - startTime;
 
-        if (!dotSprite.parent) dots.current.addChild(dotSprite);
+          for (let i = 0; i < totalDots; i++) {
+            let dotSprite = dotPool.current[i];
+            if (!dotSprite) {
+              dotSprite = new PIXI.Sprite(window.circleTexture);
+              dotSprite.anchor.set(0.5);
+              dotPool.current[i] = dotSprite;
+            }
 
-        // Scale the sprite by how big you want the "outer glow"
-        const outerRadius = dotData.innerRadius * dotOuterRadiusMultiplier;
-        const baseRadius = window.baseRadius || 6; // same as where we drew circleGfx
-        const scaleFactor = outerRadius / baseRadius;
+            const dotData = dotsData[i];
+            const localTime = elapsed - dotData.delay;
+            if (localTime < 0) {
+              // not started yet
+              if (dotSprite.parent) dots.current.removeChild(dotSprite);
+              continue;
+            }
 
-        dotSprite.tint = dotColor;
-        dotSprite.x = currentX;
-        dotSprite.y = currentY;
-        dotSprite.alpha = alpha;
-        dotSprite.scale.set(scaleFactor);
+            // progress from 0..1 across total effect duration minus delay
+            const progress = Math.min(1, localTime / (duration - dotData.delay));
+            const alpha = 1 - progress;
+            const currentX = dotData.startX + progress * (targetX - dotData.startX);
+            const currentY = dotData.startY + progress * (targetY - dotData.startY);
+
+            if (!dotSprite.parent) {
+              dots.current.addChild(dotSprite);
+            }
+
+            const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
+            const baseRadius = window.baseRadius || 6; 
+            const scaleFactor = outerRadius / baseRadius;
+
+            dotSprite.tint = dotColor;
+            dotSprite.x = currentX;
+            dotSprite.y = currentY;
+            dotSprite.alpha = alpha;
+            dotSprite.scale.set(scaleFactor);
+          }
+
+          if (elapsed < duration) {
+            animationFrameId = requestAnimationFrame(animateDots);
+          } else {
+            // All done
+            cleanupDots();
+          }
+        };
+
+        animateDots();
+
+        return () => {
+          cancelAnimationFrame(animationFrameId);
+          cleanupDots();
+        };
       }
+    }, [duration, pixiActive, dotColor, dotInnerRadius,
+        dotOuterRadiusMultiplier, cleanupDots]);
 
-      if (elapsed < duration) {
-        animationFrameId = requestAnimationFrame(animateDots);
-      } else {
-        // Animation done; remove children etc.
-        cleanupDots();
-      }
-    };
-
-    animateDots();
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      cleanupDots();
-    };
-  }
-}, [duration, pixiActive, dotColor, dotInnerRadius,
-    dotOuterRadiusMultiplier, cleanupDots]);
-      
     return null;
   };
 
+  // Render the container with or without the effect
   return (
     <div
       style={{
         position: 'relative',
         height,
+        // keep the height transition at 0.5s if you like
         transition: 'height 0.5s ease-out',
+
+        // Add a green debug border around the bounding placeholder
+        border: '2px solid limegreen',
       }}
       ref={containerRef}
     >
       <div
         style={{
+          // The fade and transform match FADE_DURATION_S
           opacity: animate ? 1 : initialStyle.opacity,
           transform: animate ? 'none' : initialStyle.transform,
-          transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
+          transition: `opacity ${FADE_DURATION_S}s ease-out, transform ${FADE_DURATION_S}s ease-out`,
           position: 'relative',
           zIndex: 3,
           ...(animate && animationType === 'float' && {
-            animation: `${floatFall} 2s ease-out forwards`,
+            animation: `${floatFall} ${FADE_DURATION_S}s ease-out forwards`,
           }),
           ...(animate && animationType === 'flicker' && {
-            animation: `${flicker} 1s ease-out forwards`,
+            animation: `${flicker} ${FADE_DURATION_S}s ease-out forwards`,
           }),
         }}
       >
         {children}
       </div>
+
       {animationType === 'materialize' && pixiActive && (
-        <MaterializeEffect duration={2100} dotColor={0xffff00} />
+        <MaterializeEffect />
       )}
     </div>
   );
 };
 
-//
-// ----- EventScroller (same as before) -----
-//
+// ---------------- EventScroller ----------------
 const EventScroller = ({ children }) => {
   const scrollableContentRef = useRef(null);
 
@@ -369,14 +361,14 @@ const EventScroller = ({ children }) => {
 
   return (
     <ScrollerContainer>
-      <ScrollableContent ref={scrollableContentRef}>{children}</ScrollableContent>
+      <ScrollableContent ref={scrollableContentRef}>
+        {children}
+      </ScrollableContent>
     </ScrollerContainer>
   );
 };
 
-//
-// ----- Message Components (same as before) -----
-//
+// ---------------- Message Components ----------------
 const MessageBase = styled.div`
   padding: 10px;
   margin: 10px;
@@ -385,7 +377,7 @@ const MessageBase = styled.div`
   border-radius: 8px;
   background-color: rgba(0, 0, 0, 0.5);
   position: relative;
-  z-index: 4; /* Ensure the message is above the PIXI animation */
+  z-index: 4; /* above the PIXI animation */
   &::after {
     content: '${(props) => props.dateTime}';
     display: block;
@@ -450,9 +442,7 @@ const MessageComponent = ({ message, dateTime }) => {
   }
 };
 
-//
-// ----- Background and PageContainer (same as before) -----
-//
+// ---------------- Background, PageContainer, etc. ----------------
 const Background = styled.div`
   position: fixed;
   top: 0;
@@ -505,9 +495,7 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
-//
-// ----- Utility to create a new random message (same as before) -----
-//
+// Utility for random messages
 const createRandomMessage = (id, type, animation) => {
   const now = new Date();
   const newMessage = {
@@ -539,9 +527,7 @@ const createRandomMessage = (id, type, animation) => {
   return newMessage;
 };
 
-//
-// ----- The main DemoPage component -----
-//
+// ---------------- Main DemoPage ----------------
 const DemoPage = () => {
   const [messages, setMessages] = useState(() => {
     const now = new Date();
@@ -566,6 +552,7 @@ const DemoPage = () => {
       } else if (type === 'error') {
         message.text = `Message ${i}: Something went wrong!`;
       }
+      // random animation
       message.animation = animations[Math.floor(Math.random() * animations.length)];
       initialMessages.push(message);
     }
@@ -575,9 +562,6 @@ const DemoPage = () => {
   const [selectedType, setSelectedType] = useState(messageTypes[0]);
   const [selectedAnimation, setSelectedAnimation] = useState(animations[0]);
 
-  //
-  // Add a random message using user-selected type+animation
-  //
   const addRandomMessage = useCallback(() => {
     const newMessage = createRandomMessage(
       nextIdRef.current++,
@@ -587,18 +571,12 @@ const DemoPage = () => {
     setMessages((prev) => [newMessage, ...prev]);
   }, [selectedType, selectedAnimation]);
 
-  //
-  // Mark message as no longer "isNew" once its animation completes
-  //
   const markMessageAsFinal = useCallback((id) => {
     setMessages((prev) =>
       prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
     );
   }, []);
 
-  //
-  // Render each message in a placeholder with animation
-  //
   const renderMessage = useCallback(
     (msg) => {
       const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
@@ -616,13 +594,9 @@ const DemoPage = () => {
     [markMessageAsFinal]
   );
 
-  //
-  // 1) Initialize the PIXI app once and store in window
-  // 2) Create a circle texture to use for "materialize" dots
-  //
+  // Initialize PIXI + circle texture once
   useEffect(() => {
     if (!window.pixiApp) {
-      // create PIXI app
       const canvasWidth = window.innerWidth;
       const canvasHeight = window.innerHeight;
 
@@ -641,33 +615,31 @@ const DemoPage = () => {
       }
       pixiContainer.appendChild(window.pixiApp.view);
 
-      // create a ParticleContainer
-      window.dots = new PIXI.ParticleContainer(1000, {
+      // Create ParticleContainer for the dot sprites
+      window.dots = new PIXI.ParticleContainer(2000, {
         scale: true,
         position: true,
         alpha: true,
-        tint: true, // allow color tinting
+        tint: true,
       });
       window.dots.blendMode = PIXI.BLEND_MODES.ADD;
       window.pixiApp.stage.addChild(window.dots);
 
-      // Create a small white circle shape in a Graphics
-      const baseRadius = 6; // ~6px radius
-      window.baseRadius = baseRadius; // store so we can scale later
+      // Draw a base circle in Graphics -> texture
+      const baseRadius = 6;
+      window.baseRadius = baseRadius;
       const circleGfx = new PIXI.Graphics();
       circleGfx.beginFill(0xffffff);
       circleGfx.drawCircle(0, 0, baseRadius);
       circleGfx.endFill();
-
-      // Generate a texture from that Graphics
       window.circleTexture = window.pixiApp.renderer.generateTexture(circleGfx);
     }
 
-    // Cleanup: destroy pixiApp once when unmounting
+    // Cleanup when unmounting
     return () => {
       if (window.pixiApp) {
         if (window.dots) {
-          window.dots.removeChildren(); // empty container
+          window.dots.removeChildren();
           window.dots.destroy({ children: true });
           window.dots = null;
         }
@@ -685,7 +657,6 @@ const DemoPage = () => {
   return (
     <StyleSheetManager shouldForwardProp={(prop) => prop !== 'exiting'}>
       <Background />
-      {/** Full-screen container for PIXI canvases **/}
       <PixiContainer id="pixi-container" />
 
       <ButtonBar style={{ flexDirection: 'column' }}>
@@ -697,13 +668,10 @@ const DemoPage = () => {
               </option>
             ))}
           </select>
-          <select
-            value={selectedAnimation}
-            onChange={(e) => setSelectedAnimation(e.target.value)}
-          >
-            {animations.map((animation) => (
-              <option key={animation} value={animation}>
-                {animation}
+          <select value={selectedAnimation} onChange={(e) => setSelectedAnimation(e.target.value)}>
+            {animations.map((anim) => (
+              <option key={anim} value={anim}>
+                {anim}
               </option>
             ))}
           </select>
