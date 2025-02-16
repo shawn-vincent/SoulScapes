@@ -111,7 +111,6 @@ const Spot = () => {
       spotManager.joinSpot("lobby");
       hasJoined.current = true;
     }
-
     const updateStatus = (status) => setConnectionStatus(status);
     localAvatarManager.on("statusChanged", updateStatus);
     return () => {
@@ -130,11 +129,9 @@ const Spot = () => {
     const updateAvatars = () => {
       setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
     };
-
     const updateLocalAvatar = () => {
       setLocalAvatar({ ...localAvatarManager.getAvatarData() });
     };
-
     remoteAvatarManager.on("updated", updateAvatars);
     localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
     return () => {
@@ -152,16 +149,13 @@ const Spot = () => {
   const renderAvatarArea = () => (
     <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
       <AvatarClusterContainer>
-        <ScrollLayout>
           <AvatarClusterLayout avatarSize={80}>
             {avatars.map((avatar) => (
               <Avatar key={avatar.id} data={avatar} />
             ))}
           </AvatarClusterLayout>
-        </ScrollLayout>
       </AvatarClusterContainer>
       <AvatarGridContainer>
-        <ScrollLayout top={false} bottom={false}>
           <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
             <Avatar
               data={{
@@ -170,7 +164,6 @@ const Spot = () => {
               }}
             />
           </AvatarHorizontalGridLayout>
-        </ScrollLayout>
       </AvatarGridContainer>
     </DividedLayout>
   );

@@ -96,7 +96,47 @@ export class FlickerAnimation extends BaseAnimation {
   }
 }
 
+
 export class DropAnimation extends BaseAnimation {
+    constructor() {
+        const dropKeyframes = keyframes`
+      0% {
+        transform: translateY(-120vh) rotate(0deg);
+        opacity: 0; /* Add for Fade In */
+      }
+      5% {          /* Add the "Anticipation" */
+        transform: translateY(-125vh) rotate(0deg);
+        opacity: 0.2;   /* Add for Fade In */
+      }
+      10%{        /* Add a short pause to build tension */
+        transform: translateY(-125vh) rotate(0deg);
+        opacity: 0.2;
+      }
+      80% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;       /* Fade in complete*/
+        filter: blur(2px); /* motion blur */
+      }
+      100% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 1;
+        filter: blur(0px); /* stop motion blur */
+      }
+    `;
+        super({
+            name: "drop",
+            keyframes: dropKeyframes,
+            duration: 0.6, // Speed Up the Drop!
+            initialStyle: { opacity: 0, transform: "translateY(-120vh)" },  // Add for Fade In
+        });
+    }
+  getCSS() {
+      return css`
+          animation: ${this.keyframes} ${this.duration}s cubic-bezier(0.0, 0.0, 0.0, 1.0) forwards;  /* Emphasize the acceleration */
+      `;
+  }
+}
+export class DropAnimation_old extends BaseAnimation {
   constructor() {
     const dropKeyframes = keyframes`
       0% {
