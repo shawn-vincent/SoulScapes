@@ -12,6 +12,8 @@ import styled, {
 } from "styled-components";
 import { format } from "date-fns";
 import * as PIXI from "pixi.js";
+// Import the regular slogger logging functions.
+import { slog, serror, sdebug, swarn } from '../../../shared/slogger.js';
 
 // ---------- DURATION CONSTANTS (in seconds) ----------
 const FADE_DURATION = 2.0;
@@ -23,7 +25,6 @@ const MATERIALIZE_DURATION = FADE_DURATION * 0.33;
 
 // ---------- Configuration ----------
 const EVENT_TYPES = ["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"];
-// Zip animations are now split into 4 distinct directions.
 const EVENT_CREATION_ANIMATIONS = [
   "fade",
   "drop",
@@ -37,14 +38,11 @@ const EVENT_CREATION_ANIMATIONS = [
 ];
 
 // ---------- Keyframe Animations ----------
-
-// Fade: simple opacity transition
 const fadeAnimation = keyframes`
   from { opacity: 0; }
   to { opacity: 1; }
 `;
 
-// Float: as before
 const floatFall = keyframes`
   0% {
     transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
@@ -64,7 +62,6 @@ const floatFall = keyframes`
   }
 `;
 
-// Flicker: dramatic series of flashes
 const flicker = keyframes`
   0% { opacity: 0; }
   10% { opacity: 1; }
@@ -79,9 +76,6 @@ const flicker = keyframes`
   100% { opacity: 1; }
 `;
 
-// Drop: simulates a heavy anvil dropping onto a solid surface.
-// The anvil drops from far above to the target, then shows a brief bounce
-// by lifting one side (via a slight upward translation and rotation) before settling.
 const dropAnimation = keyframes`
   0% {
     transform: translateY(-120vh) rotate(0deg);
@@ -97,10 +91,6 @@ const dropAnimation = keyframes`
   }
 `;
 
-// Zip Animations – each starts off-screen from a consistent direction,
-// overshoots slightly, then settles.
-
-// zipUp: enters from below (i.e. starts at +100vh)
 const zipUp = keyframes`
   0% {
     transform: translateY(100vh);
@@ -116,7 +106,6 @@ const zipUp = keyframes`
   }
 `;
 
-// zipDown: enters from above (i.e. starts at -100vh)
 const zipDown = keyframes`
   0% {
     transform: translateY(-100vh);
@@ -132,7 +121,6 @@ const zipDown = keyframes`
   }
 `;
 
-// zipRight: enters from the left (i.e. starts at -100vw)
 const zipRight = keyframes`
   0% {
     transform: translateX(-100vw);
@@ -148,7 +136,6 @@ const zipRight = keyframes`
   }
 `;
 
-// zipLeft: enters from the right (i.e. starts at +100vw)
 const zipLeft = keyframes`
   0% {
     transform: translateX(100vw);
@@ -164,7 +151,7 @@ const zipLeft = keyframes`
   }
 `;
 
-// ---------- The Outer Scroller/Container (EventPane) ----------
+// ---------- Styled Components ----------
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -186,7 +173,6 @@ const ScrollableContent = styled.div`
   scroll-behavior: smooth;
   padding: 0;
   margin: 0;
-  /* Hide scrollbar */
   -ms-overflow-style: none;
   scrollbar-width: none;
   &::-webkit-scrollbar {
@@ -194,7 +180,6 @@ const ScrollableContent = styled.div`
   }
 `;
 
-// ---------- Bubbles (forwardRef) ----------
 const ChatBubbleBase = React.forwardRef((props, ref) => (
   <div ref={ref} {...props} />
 ));
@@ -264,7 +249,6 @@ export const ErrorEvent = styled(ChatBubbleBase)`
   }
 `;
 
-// ---------- The Animated Bubble Container ----------
 const AnimatedBubbleContainer = styled.div`
   position: relative;
   z-index: 3;
@@ -314,7 +298,6 @@ const AnimatedBubbleContainer = styled.div`
     `}
 `;
 
-// ---------- The Placeholder (animation wrapper) renamed to EventAnimationPlaceholder ----------
 const EventAnimationPlaceholder = ({
   isNew,
   creationAnimation,
@@ -487,7 +470,6 @@ const EventAnimationPlaceholder = ({
   );
 };
 
-// ---------- The Event Pane ----------
 const EventPane = ({ children }) => {
   const scrollableContentRef = useRef(null);
   const scrollToBottom = useCallback(() => {
@@ -507,7 +489,6 @@ const EventPane = ({ children }) => {
   );
 };
 
-// ---------- Page Layout ----------
 const Background = styled.div`
   position: fixed;
   top: 0;
@@ -560,7 +541,6 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
-// ---------- Event Logic ----------
 const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
   switch (event.type) {
     case "chatMessageEvent":
@@ -612,7 +592,6 @@ function createRandomEvent(id, type, creationAnimation) {
   return newEvent;
 }
 
-// ---------- Main DemoPage ----------
 export default function DemoPage() {
   const [events, setEvents] = useState(() => {
     const now = new Date();
@@ -644,7 +623,6 @@ export default function DemoPage() {
   });
 
   const nextIdRef = useRef(6);
-  // Defaults: "chatMessageEvent" and "zipUp"
   const [selectedType, setSelectedType] = useState("chatMessageEvent");
   const [selectedCreationAnimation, setSelectedCreationAnimation] = useState("zipUp");
 
@@ -655,12 +633,14 @@ export default function DemoPage() {
       selectedCreationAnimation
     );
     setEvents((prev) => [newEvent, ...prev]);
+    slog("DemoPage", `Added new event (id: ${newEvent.id}) of type ${newEvent.type}.`);
   }, [selectedType, selectedCreationAnimation]);
 
   const markEventAsFinal = useCallback((id) => {
     setEvents((prev) =>
       prev.map((evt) => (evt.id === id ? { ...evt, isNew: false } : evt))
     );
+    slog("DemoPage", `Event (id: ${id}) animation completed.`);
   }, []);
 
   const renderEvent = useCallback(
@@ -681,51 +661,61 @@ export default function DemoPage() {
   );
 
   useEffect(() => {
-    if (!window.pixiApp) {
-      const canvasWidth = window.innerWidth;
-      const canvasHeight = window.innerHeight;
-      window.pixiApp = new PIXI.Application({
-        width: canvasWidth,
-        height: canvasHeight,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-        transparent: true,
-      });
-      const pixiContainer = document.getElementById("pixi-container");
-      if (!pixiContainer) {
-        console.error("PIXI container not found! Materialize effect will not work.");
-        return;
+    try {
+      if (!window.pixiApp) {
+        const canvasWidth = window.innerWidth;
+        const canvasHeight = window.innerHeight;
+        window.pixiApp = new PIXI.Application({
+          width: canvasWidth,
+          height: canvasHeight,
+          resolution: window.devicePixelRatio || 1,
+          autoDensity: true,
+          transparent: true,
+        });
+        const pixiContainer = document.getElementById("pixi-container");
+        if (!pixiContainer) {
+          serror("DemoPage", "PIXI container not found! Materialize effect will not work.");
+          return;
+        }
+        pixiContainer.appendChild(window.pixiApp.view);
+        window.dots = new PIXI.particles.ParticleContainer(5000, {
+          scale: true,
+          position: true,
+          alpha: true,
+          tint: true,
+        });
+        window.dots.blendMode = PIXI.BLEND_MODES.ADD;
+        window.pixiApp.stage.addChild(window.dots);
+        const baseRadius = 6;
+        window.baseRadius = baseRadius;
+        const circleGfx = new PIXI.Graphics();
+        circleGfx.beginFill(0xffffff);
+        circleGfx.drawCircle(0, 0, baseRadius);
+        circleGfx.endFill();
+        window.circleTexture = window.pixiApp.renderer.generateTexture(circleGfx);
+        slog("DemoPage", "PIXI application initialized successfully.");
       }
-      pixiContainer.appendChild(window.pixiApp.view);
-      window.dots = new PIXI.particles.ParticleContainer(5000, {
-        scale: true,
-        position: true,
-        alpha: true,
-        tint: true,
-      });
-      window.dots.blendMode = PIXI.BLEND_MODES.ADD;
-      window.pixiApp.stage.addChild(window.dots);
-      const baseRadius = 6;
-      window.baseRadius = baseRadius;
-      const circleGfx = new PIXI.Graphics();
-      circleGfx.beginFill(0xffffff);
-      circleGfx.drawCircle(0, 0, baseRadius);
-      circleGfx.endFill();
-      window.circleTexture = window.pixiApp.renderer.generateTexture(circleGfx);
+    } catch (error) {
+      serror("DemoPage", `Error initializing PIXI: ${error.message}`);
     }
     return () => {
-      if (window.pixiApp) {
-        if (window.dots) {
-          window.dots.removeChildren();
-          window.dots.destroy({ children: true });
-          window.dots = null;
+      try {
+        if (window.pixiApp) {
+          if (window.dots) {
+            window.dots.removeChildren();
+            window.dots.destroy({ children: true });
+            window.dots = null;
+          }
+          window.pixiApp.destroy(true, { children: true, texture: true, baseTexture: true });
+          window.pixiApp = null;
+          const pixiContainer = document.getElementById("pixi-container");
+          if (pixiContainer) {
+            pixiContainer.innerHTML = "";
+          }
+          slog("DemoPage", "PIXI application cleaned up.");
         }
-        window.pixiApp.destroy(true, { children: true, texture: true, baseTexture: true });
-        window.pixiApp = null;
-        const pixiContainer = document.getElementById("pixi-container");
-        if (pixiContainer) {
-          pixiContainer.innerHTML = "";
-        }
+      } catch (cleanupError) {
+        serror("DemoPage", `Error during PIXI cleanup: ${cleanupError.message}`);
       }
     };
   }, []);
@@ -736,33 +726,35 @@ export default function DemoPage() {
         !["isAnimated", "creationAnimation", "initialOpacity", "initialTransform"].includes(prop)
       }
     >
-      <Background />
-      <PixiContainer id="pixi-container" />
-      <ButtonBar style={{ flexDirection: "column" }}>
-        <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
-          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-            {EVENT_TYPES.map((typeItem) => (
-              <option key={typeItem} value={typeItem}>
-                {typeItem}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedCreationAnimation}
-            onChange={(e) => setSelectedCreationAnimation(e.target.value)}
-          >
-            {EVENT_CREATION_ANIMATIONS.map((anim) => (
-              <option key={anim} value={anim}>
-                {anim}
-              </option>
-            ))}
-          </select>
-        </div>
-        <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
-      </ButtonBar>
-      <PageContainer>
-        <EventPane>{events.map(renderEvent)}</EventPane>
-      </PageContainer>
+      <>
+        <Background />
+        <PixiContainer id="pixi-container" />
+        <ButtonBar style={{ flexDirection: "column" }}>
+          <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
+            <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
+              {EVENT_TYPES.map((typeItem) => (
+                <option key={typeItem} value={typeItem}>
+                  {typeItem}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedCreationAnimation}
+              onChange={(e) => setSelectedCreationAnimation(e.target.value)}
+            >
+              {EVENT_CREATION_ANIMATIONS.map((anim) => (
+                <option key={anim} value={anim}>
+                  {anim}
+                </option>
+              ))}
+            </select>
+          </div>
+          <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
+        </ButtonBar>
+        <PageContainer>
+          <EventPane>{events.map(renderEvent)}</EventPane>
+        </PageContainer>
+      </>
     </StyleSheetManager>
   );
 }
