@@ -1,29 +1,28 @@
 import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-} from 'react';
+    useState,
+    useRef,
+    useEffect,
+    useCallback,
+    useMemo,
+} from "react";
 import styled, {
-  StyleSheetManager,
-  keyframes,
-} from 'styled-components';
-import {
-  format,
-} from 'date-fns';
-import * as PIXI from 'pixi.js';
+    StyleSheetManager,
+    keyframes,
+    css,
+} from "styled-components";
+import { format } from "date-fns";
+import * as PIXI from "pixi.js";
 
-// ---------------- Constants for fade + materialize durations ----------------
-const FADE_DURATION_S = 2.0; // e.g. 2 seconds for the fade
-const MATERIALIZE_DURATION_MS = FADE_DURATION_S * 1000 / 2; 
-// => 1000 ms (1 second) = half the fade duration
+// ---------- TIMING CONSTANTS ----------
+const FADE_DURATION_S = 2.0;
+const MATERIALIZE_RATIO = 1;
+const MATERIALIZE_DURATION_MS = FADE_DURATION_S * 1000 * MATERIALIZE_RATIO;
 
-// ---------------- Configuration ----------------
-const messageTypes = ['chat', 'event', 'action', 'error'];
-const animations = ['fade', 'drop', 'zip', 'float', 'flicker', 'materialize'];
+// ---------- Configuration ----------
+const messageTypes = ["chat", "event", "action", "error"];
+const animations = ["fade", "drop", "zip", "float", "flicker", "materialize"];
 
-// ---------------- Keyframe Animations ----------------
+// ---------- Keyframe Animations ----------
 const floatFall = keyframes`
   0% {
     transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
@@ -70,7 +69,7 @@ const flicker = keyframes`
   }
 `;
 
-// ---------------- Styled Components ----------------
+// ---------- The Outer Scroller/Container ----------
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -100,301 +99,35 @@ const ScrollableContent = styled.div`
   }
 `;
 
-// ---------------- MessagePlaceholder ----------------
-const MessagePlaceholder = ({
-  isNew,
-  animationType,
-  children,
-  onAnimationComplete,
-}) => {
-  const [height, setHeight] = useState(isNew ? 0 : 80);
-  const [animate, setAnimate] = useState(false);
-  const [pixiActive, setPixiActive] = useState(false);
-  const containerRef = useRef(null);
+// ---------- Bubbles: forwardRef so we can measure them ----------
+const ChatBubbleBase = React.forwardRef((props, ref) => (
+    <div ref={ref} {...props} />
+));
 
-  // Initial style for message content before/after animation
-  const initialStyle = useMemo(() => {
-    const getInitialInnerStyle = (type) => {
-      switch (type) {
-        case 'drop':
-          return { opacity: 0, transform: 'translateY(-100vh)' };
-        case 'float':
-          return {
-            opacity: 0,
-            transform: 'translateY(-100vh) translateX(10vw) rotate(10deg)',
-          };
-        case 'zip':
-          return { opacity: 0, transform: 'translateX(100vw)' };
-        case 'flicker':
-          return { opacity: 0.2, transform: 'none' };
-        case 'materialize':
-          return { opacity: 0, transform: 'none' };
-        case 'fade':
-        default:
-          return { opacity: 0, transform: 'none' };
-      }
-    };
-
-    return isNew
-      ? getInitialInnerStyle(animationType)
-      : { opacity: 1, transform: 'none' };
-  }, [isNew, animationType]);
-
-  // Start the animation
-  const startAnimation = useCallback(() => {
-    // Expand the placeholder
-    setHeight(80);
-
-    // If materialize, turn on the dot effect
-    if (animationType === 'materialize') {
-      setPixiActive(true);
-    }
-
-    // Begin fade & transform right away
-    setAnimate(true);
-
-    // Overall fade/animation time
-    const completionDelay =
-      animationType === 'materialize'
-        ? MATERIALIZE_DURATION_MS // use the constant
-        : 800; // or other fallback timing
-
-    // Once time is up, do final callback + turn off effect
-    const timer = setTimeout(() => {
-      if (onAnimationComplete) onAnimationComplete();
-      setPixiActive(false);
-    }, completionDelay);
-
-    return () => clearTimeout(timer);
-  }, [animationType, onAnimationComplete]);
-
-  useEffect(() => {
-    if (isNew) {
-      return startAnimation();
-    }
-  }, [isNew, startAnimation]);
-
-  // ------------ MaterializeEffect that runs for MATERIALIZE_DURATION_MS ------------
-  const MaterializeEffect = ({
-    duration = MATERIALIZE_DURATION_MS, // from the constant
-    dotColor = 0xffffff,
-    dotInnerRadius = 0.8,
-    dotOuterRadiusMultiplier = 2,
-  }) => {
-    const pixiApp = useRef(window.pixiApp);
-    const dots = useRef(window.dots);
-    const dotPool = useRef([]);
-
-    // Just remove children, don't destroy the container
-    const cleanupDots = useCallback(() => {
-      if (dots.current) {
-        dots.current.removeChildren();
-      }
-      dotPool.current.forEach((sprite) => {
-        if (sprite && sprite.destroy) {
-          sprite.destroy();
-        }
-      });
-      dotPool.current = [];
-    }, []);
-
-    useEffect(() => {
-      let animationFrameId;
-      if (containerRef.current && pixiApp.current && dots.current && pixiActive) {
-        // Convert DOM coords -> PIXI coords
-        const getTargetCoordinates = () => {
-          // We'll measure the entire placeholder container
-          const rect = containerRef.current.getBoundingClientRect();
-          const msgCenterX = rect.left + rect.width / 2;
-          const msgCenterY = rect.top + rect.height / 2;
-
-          // mapPositionToPoint handles scrolling/offset
-          const point = new PIXI.Point();
-          pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
-            point,
-            msgCenterX,
-            msgCenterY
-          );
-          return { x: point.x, y: point.y };
-        };
-
-        const { x: targetX, y: targetY } = getTargetCoordinates();
-
-        // We'll spawn a bunch of dots
-        const totalDots = 800; 
-        // short random start delays so it doesn't all happen at once
-        const maxDelay = duration * 0.2; // 20% of the overall time is random delay
-        const dotsData = [];
-
-        const circleRadius = Math.max(
-          pixiApp.current.renderer.width,
-          pixiApp.current.renderer.height
-        ) * 1.0; // you can tweak this to fill the screen
-
-        // Precompute random spawn positions
-        for (let i = 0; i < totalDots; i++) {
-          const angle = Math.random() * 2 * Math.PI;
-          const r = Math.sqrt(Math.random()) * circleRadius;
-          const startX = targetX + r * Math.cos(angle);
-          const startY = targetY + r * Math.sin(angle);
-          const delay = Math.random() * maxDelay;
-          const innerR = dotInnerRadius + Math.random() * 0.3; // slight variation
-          dotsData.push({ startX, startY, delay, innerR });
-        }
-
-        const startTime = performance.now();
-
-        const animateDots = () => {
-          const elapsed = performance.now() - startTime;
-
-          for (let i = 0; i < totalDots; i++) {
-            let dotSprite = dotPool.current[i];
-            if (!dotSprite) {
-              dotSprite = new PIXI.Sprite(window.circleTexture);
-              dotSprite.anchor.set(0.5);
-              dotPool.current[i] = dotSprite;
-            }
-
-            const dotData = dotsData[i];
-            const localTime = elapsed - dotData.delay;
-            if (localTime < 0) {
-              // not started yet
-              if (dotSprite.parent) dots.current.removeChild(dotSprite);
-              continue;
-            }
-
-            // progress from 0..1 across total effect duration minus delay
-            const progress = Math.min(1, localTime / (duration - dotData.delay));
-            const alpha = 1 - progress;
-            const currentX = dotData.startX + progress * (targetX - dotData.startX);
-            const currentY = dotData.startY + progress * (targetY - dotData.startY);
-
-            if (!dotSprite.parent) {
-              dots.current.addChild(dotSprite);
-            }
-
-            const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
-            const baseRadius = window.baseRadius || 6; 
-            const scaleFactor = outerRadius / baseRadius;
-
-            dotSprite.tint = dotColor;
-            dotSprite.x = currentX;
-            dotSprite.y = currentY;
-            dotSprite.alpha = alpha;
-            dotSprite.scale.set(scaleFactor);
-          }
-
-          if (elapsed < duration) {
-            animationFrameId = requestAnimationFrame(animateDots);
-          } else {
-            // All done
-            cleanupDots();
-          }
-        };
-
-        animateDots();
-
-        return () => {
-          cancelAnimationFrame(animationFrameId);
-          cleanupDots();
-        };
-      }
-    }, [duration, pixiActive, dotColor, dotInnerRadius,
-        dotOuterRadiusMultiplier, cleanupDots]);
-
-    return null;
-  };
-
-  // Render the container with or without the effect
-  return (
-    <div
-      style={{
-        position: 'relative',
-        height,
-        // keep the height transition at 0.5s if you like
-        transition: 'height 0.5s ease-out',
-
-        // Add a green debug border around the bounding placeholder
-        border: '2px solid limegreen',
-      }}
-      ref={containerRef}
-    >
-      <div
-        style={{
-          // The fade and transform match FADE_DURATION_S
-          opacity: animate ? 1 : initialStyle.opacity,
-          transform: animate ? 'none' : initialStyle.transform,
-          transition: `opacity ${FADE_DURATION_S}s ease-out, transform ${FADE_DURATION_S}s ease-out`,
-          position: 'relative',
-          zIndex: 3,
-          ...(animate && animationType === 'float' && {
-            animation: `${floatFall} ${FADE_DURATION_S}s ease-out forwards`,
-          }),
-          ...(animate && animationType === 'flicker' && {
-            animation: `${flicker} ${FADE_DURATION_S}s ease-out forwards`,
-          }),
-        }}
-      >
-        {children}
-      </div>
-
-      {animationType === 'materialize' && pixiActive && (
-        <MaterializeEffect />
-      )}
-    </div>
-  );
-};
-
-// ---------------- EventScroller ----------------
-const EventScroller = ({ children }) => {
-  const scrollableContentRef = useRef(null);
-
-  const scrollToBottom = useCallback(() => {
-    if (scrollableContentRef.current) {
-      scrollableContentRef.current.scrollTop = 0;
-    }
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [children, scrollToBottom]);
-
-  return (
-    <ScrollerContainer>
-      <ScrollableContent ref={scrollableContentRef}>
-        {children}
-      </ScrollableContent>
-    </ScrollerContainer>
-  );
-};
-
-// ---------------- Message Components ----------------
-const MessageBase = styled.div`
-  padding: 10px;
+export const ChatMessage = styled(ChatBubbleBase)`
+  border: 2px solid limegreen;
   margin: 10px;
-  color: white;
-  font-size: 1em;
+  padding: 10px;
+  color: #000;
+  background-color: rgba(255, 255, 255, 0.4);
+  max-width: 70%;
+  align-self: flex-start;
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.5);
   position: relative;
-  z-index: 4; /* above the PIXI animation */
   &::after {
-    content: '${(props) => props.dateTime}';
+    content: "${(props) => props.dateTime}";
     display: block;
     font-size: 0.7em;
     margin-top: 3px;
-    color: #ccc;
+    color: #333;
     text-align: right;
   }
 `;
 
-const ChatMessage = styled(MessageBase)`
-  background-color: rgba(255, 255, 255, 0.4);
-  max-width: 70%;
-  align-self: flex-start;
-`;
-
-const EventMessage = styled(MessageBase)`
+export const EventMessage = styled(ChatBubbleBase)`
+  border: 2px solid limegreen;
+  margin: 10px auto;
+  padding: 10px;
   text-align: center;
   color: #aaa;
   font-size: 0.9em;
@@ -404,7 +137,10 @@ const EventMessage = styled(MessageBase)`
   width: fit-content;
 `;
 
-const ActionMessage = styled(MessageBase)`
+export const ActionMessage = styled(ChatBubbleBase)`
+  border: 2px solid limegreen;
+  margin: 10px auto;
+  padding: 10px;
   text-align: center;
   color: #ddd;
   font-size: 0.9em;
@@ -414,42 +150,304 @@ const ActionMessage = styled(MessageBase)`
   width: fit-content;
 `;
 
-const ErrorMessage = styled(MessageBase)`
+export const ErrorMessage = styled(ChatBubbleBase)`
+  border: 2px solid limegreen;
+  margin: 10px;
+  padding: 10px;
   background-color: rgba(255, 0, 0, 0.6);
-  border: 2px solid red;
+  border-radius: 8px;
   box-shadow: 0 0 10px red;
   max-width: 70%;
   align-self: flex-start;
+  position: relative;
+  color: #fff;
+  &::after {
+    content: "${(props) => props.dateTime}";
+    display: block;
+    font-size: 0.7em;
+    margin-top: 3px;
+    color: #ccc;
+    text-align: right;
+  }
 `;
 
-const MessageComponent = ({ message, dateTime }) => {
-  switch (message.type) {
-    case 'chat':
-      return (
-        <ChatMessage dateTime={dateTime}>
-          <strong>{message.user}: </strong>
-          {message.text}
-        </ChatMessage>
-      );
-    case 'event':
-      return <EventMessage dateTime={dateTime}>{message.text}</EventMessage>;
-    case 'action':
-      return <ActionMessage dateTime={dateTime}>{message.text}</ActionMessage>;
-    case 'error':
-      return <ErrorMessage dateTime={dateTime}>{message.text}</ErrorMessage>;
-    default:
-      return <div dateTime={dateTime}>Unknown message type</div>;
-  }
+// ---------- The Animated Bubble Container ----------
+const AnimatedBubbleContainer = styled.div`
+  position: relative;
+  z-index: 3;
+  opacity: ${(props) => (props.animate ? 1 : props.initialOpacity)};
+  transform: ${(props) => (props.animate ? "none" : props.initialTransform)};
+  transition: opacity ${FADE_DURATION_S}s ease-out,
+    transform ${FADE_DURATION_S}s ease-out;
+
+  ${(props) =>
+    props.animate &&
+    props.animationType === "float" &&
+    css`
+animation: ${floatFall} ${FADE_DURATION_S}s ease-out forwards;
+`}
+
+  ${(props) =>
+    props.animate &&
+    props.animationType === "flicker" &&
+    css`
+animation: ${flicker} ${FADE_DURATION_S}s ease-out forwards;
+`}
+`;
+
+// ---------- The Placeholder (animation wrapper) ----------
+const MessagePlaceholder = ({
+    isNew,
+    animationType,
+    children,
+    onAnimationComplete,
+}) => {
+    const [height, setHeight] = useState(isNew ? 0 : 80);
+    const [animate, setAnimate] = useState(false);
+    const [pixiActive, setPixiActive] = useState(false);
+
+    const bubbleRef = useRef(null);
+
+    const singleChild = React.Children.only(children);
+    const childWithRef = React.cloneElement(singleChild, { ref: bubbleRef });
+
+    const initialStyle = useMemo(() => {
+	const getInitialInnerStyle = (type) => {
+	    switch (type) {
+            case "drop":
+		return { opacity: 0, transform: "translateY(-100vh)" };
+            case "float":
+		return {
+		    opacity: 0,
+		    transform: "translateY(-100vh) translateX(10vw) rotate(10deg)",
+		};
+            case "zip":
+		return { opacity: 0, transform: "translateX(100vw)" };
+            case "flicker":
+		return { opacity: 0.2, transform: "none" };
+            case "materialize":
+		return { opacity: 0, transform: "none" };
+            case "fade":
+            default:
+		return { opacity: 0, transform: "none" };
+	    }
+	};
+	return isNew
+	    ? getInitialInnerStyle(animationType)
+	    : { opacity: 1, transform: "none" };
+    }, [isNew, animationType]);
+
+    const startAnimation = useCallback(() => {
+	setHeight(80);
+
+	if (animationType === "materialize") {
+	    setPixiActive(true);
+	}
+	setAnimate(true);
+
+	const effectTime =
+	      animationType === "materialize" ? MATERIALIZE_DURATION_MS : 800;
+	const timer = setTimeout(() => {
+	    if (onAnimationComplete) onAnimationComplete();
+	    setPixiActive(false);
+	}, effectTime);
+
+	return () => clearTimeout(timer);
+    }, [animationType, onAnimationComplete]);
+
+    useEffect(() => {
+	if (isNew) {
+	    return startAnimation();
+	}
+    }, [isNew, startAnimation]);
+
+
+    const MaterializeEffect = ({
+	duration = MATERIALIZE_DURATION_MS,
+	dotColor = 0xffffff,
+	dotInnerRadius = 0.8,
+	dotOuterRadiusMultiplier = 2,
+    }) => {
+	const pixiApp = useRef(window.pixiApp);
+	const dots = useRef(window.dots);
+	const dotPool = useRef([]);
+
+	const cleanupDots = useCallback(() => {
+	    if (dots.current) {
+		dots.current.removeChildren();
+	    }
+	    dotPool.current.forEach((sprite) => {
+		if (sprite && sprite.destroy) {
+		    sprite.destroy();
+		}
+	    });
+	    dotPool.current = [];
+	}, []);
+
+	useEffect(() => {
+	    let animationFrameId;
+	    if (bubbleRef.current && pixiApp.current && dots.current && pixiActive) {
+		const totalDots = 800;
+		const maxDelay = duration * 0.3;
+		const dotsData = [];
+
+		const screenWidth = pixiApp.current.renderer.width;
+		const screenHeight = pixiApp.current.renderer.height;
+		const circleRadius = Math.max(screenWidth, screenHeight) * 0.9;
+
+		// Initialize dots with random starting positions and unique end positions
+		for (let i = 0; i < totalDots; i++) {
+		    const angle = Math.random() * 2 * Math.PI;
+		    const r = Math.sqrt(Math.random()) * circleRadius;
+		    const startX = screenWidth / 2 + r * Math.cos(angle);
+		    const startY = screenHeight / 2 + r * Math.sin(angle);
+
+		    const delay = Math.random() * maxDelay;
+		    const innerR = dotInnerRadius + Math.random() * 0.3;
+
+		    // Randomize the end position within the target component
+		    const rect = bubbleRef.current.getBoundingClientRect();
+		    const scrollX = window.scrollX || window.pageXOffset;
+		    const scrollY = window.scrollY || window.pageYOffset;
+		    const targetDomX = rect.left + Math.random() * rect.width + scrollX;
+		    const targetDomY = rect.top + Math.random() * rect.height + scrollY;
+
+		    // Map DOM coordinates to Pixi.js coordinates
+		    const targetPoint = new PIXI.Point();
+		    pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
+			targetPoint,
+			targetDomX,
+			targetDomY
+		    );
+		    const { x: endX, y: endY } = targetPoint;
+
+		    dotsData.push({ startX, startY, endX, endY, delay, innerR });
+		}
+
+		const startTime = performance.now();
+
+		const animateDots = () => {
+		    const elapsed = performance.now() - startTime;
+
+		    for (let i = 0; i < totalDots; i++) {
+			let dotSprite = dotPool.current[i];
+			if (!dotSprite) {
+			    dotSprite = new PIXI.Sprite(window.circleTexture);
+			    dotSprite.anchor.set(0.5);
+			    dotPool.current[i] = dotSprite;
+			}
+
+			const dotData = dotsData[i];
+			const localTime = elapsed - dotData.delay;
+			if (localTime < 0) {
+			    if (dotSprite.parent) dots.current.removeChild(dotSprite);
+			    continue;
+			}
+
+			const progress = Math.min(1, localTime / (duration - dotData.delay));
+
+			// Adjust alpha (transparency) and scale (size) based on progress
+			const alpha = progress; // Start transparent (0) and become opaque (1)
+			const scaleFactor = 1; // + progress; // Start at normal size (1) and grow to 2x size (2)
+
+			const currentX =
+			      dotData.startX + progress * (dotData.endX - dotData.startX);
+			const currentY =
+			      dotData.startY + progress * (dotData.endY - dotData.startY);
+
+			if (!dotSprite.parent) {
+			    dots.current.addChild(dotSprite);
+			}
+
+			const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
+			const baseRadius = window.baseRadius || 6;
+			const scale = (outerRadius / baseRadius) * scaleFactor;
+
+			dotSprite.tint = dotColor;
+			dotSprite.x = currentX;
+			dotSprite.y = currentY;
+			dotSprite.alpha = alpha;
+			dotSprite.scale.set(scale);
+		    }
+
+		    if (elapsed < duration) {
+			animationFrameId = requestAnimationFrame(animateDots);
+		    } else {
+			cleanupDots();
+		    }
+		};
+
+		animateDots();
+
+		return () => {
+		    cancelAnimationFrame(animationFrameId);
+		    cleanupDots();
+		};
+	    }
+	}, [
+	    duration,
+	    pixiActive,
+	    dotColor,
+	    dotInnerRadius,
+	    dotOuterRadiusMultiplier,
+	    cleanupDots,
+	]);
+
+	return null;
+    };  
+    return (
+	<div
+	    style={{
+		position: "relative",
+		height,
+		transition: "height 0.5s ease-out",
+	    }}
+	>
+	    <AnimatedBubbleContainer
+		animate={animate}
+		animationType={animationType}
+		initialOpacity={initialStyle.opacity}
+		initialTransform={initialStyle.transform}
+	    >
+		{childWithRef}
+	    </AnimatedBubbleContainer>
+
+	    {animationType === "materialize" && pixiActive && <MaterializeEffect />}
+	</div>
+    );
 };
 
-// ---------------- Background, PageContainer, etc. ----------------
+// ---------- The EventScroller ----------
+const EventScroller = ({ children }) => {
+    const scrollableContentRef = useRef(null);
+
+    const scrollToBottom = useCallback(() => {
+	if (scrollableContentRef.current) {
+	    scrollableContentRef.current.scrollTop = 0;
+	}
+    }, []);
+
+    useEffect(() => {
+	scrollToBottom();
+    }, [children, scrollToBottom]);
+
+    return (
+	<ScrollerContainer>
+	    <ScrollableContent ref={scrollableContentRef}>
+		{children}
+	    </ScrollableContent>
+	</ScrollerContainer>
+    );
+};
+
+// ---------- The Page Container, etc. ----------
 const Background = styled.div`
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg/518px-Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg');
+  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg/518px-Schwetzingen_-_Schlossgarten_-_Gro%C3%9Fer_Weiher_-_Westende_mit_Br%C3%BCcke_im_Herbst_2.jpg");
   background-size: cover;
   background-position: center;
   z-index: -1;
@@ -495,195 +493,235 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
-// Utility for random messages
-const createRandomMessage = (id, type, animation) => {
-  const now = new Date();
-  const newMessage = {
-    id,
-    date: now,
-    isNew: true,
-    type,
-    animation,
-  };
-
-  switch (type) {
-    case 'chat':
-      newMessage.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-      newMessage.text = 'New Chat: This is a new chat message.';
-      break;
-    case 'event':
-      newMessage.text = 'New Event: A new event occurred.';
-      break;
-    case 'action':
-      newMessage.text = 'New Action: An action just took place.';
-      break;
-    case 'error':
-      newMessage.text = 'New Error: Something went wrong!';
-      break;
+// ---------- Message logic ----------
+const MessageComponent = React.forwardRef(({ message, dateTime }, ref) => {
+    switch (message.type) {
+    case "chat":
+	return (
+            <ChatMessage ref={ref} dateTime={dateTime}>
+		{message.text}
+            </ChatMessage>
+	);
+    case "event":
+	return <EventMessage ref={ref}>{message.text}</EventMessage>;
+    case "action":
+	return <ActionMessage ref={ref}>{message.text}</ActionMessage>;
+    case "error":
+	return (
+            <ErrorMessage ref={ref} dateTime={dateTime}>
+		{message.text}
+            </ErrorMessage>
+	);
     default:
-      newMessage.text = 'Unknown message type.';
-  }
+	return <div ref={ref}>Unknown message type</div>;
+    }
+});
 
-  return newMessage;
-};
-
-// ---------------- Main DemoPage ----------------
-const DemoPage = () => {
-  const [messages, setMessages] = useState(() => {
+function createRandomMessage(id, type, animation) {
     const now = new Date();
-    const initialMessages = [];
-    for (let i = 0; i < 20; i++) {
-      const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
-      const animation = animations[Math.floor(Math.random() * animations.length)];
-      const message = {
-        id: i + 1,
-        date: new Date(now.getTime() - i * 60000),
-        isNew: false,
-        type,
-        animation,
-      };
-      if (type === 'chat') {
-        message.user = `User ${Math.floor(Math.random() * 5) + 1}`;
-        message.text = `Message ${i}: This is a demo chat message.`;
-      } else if (type === 'event') {
-        message.text = `Message ${i}: An event occurred.`;
-      } else if (type === 'action') {
-        message.text = `Message ${i}: An action took place.`;
-      } else if (type === 'error') {
-        message.text = `Message ${i}: Something went wrong!`;
-      }
-      // random animation
-      message.animation = animations[Math.floor(Math.random() * animations.length)];
-      initialMessages.push(message);
-    }
-    return initialMessages;
-  });
-  const nextIdRef = useRef(21);
-  const [selectedType, setSelectedType] = useState(messageTypes[0]);
-  const [selectedAnimation, setSelectedAnimation] = useState(animations[0]);
-
-  const addRandomMessage = useCallback(() => {
-    const newMessage = createRandomMessage(
-      nextIdRef.current++,
-      selectedType,
-      selectedAnimation
-    );
-    setMessages((prev) => [newMessage, ...prev]);
-  }, [selectedType, selectedAnimation]);
-
-  const markMessageAsFinal = useCallback((id) => {
-    setMessages((prev) =>
-      prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
-    );
-  }, []);
-
-  const renderMessage = useCallback(
-    (msg) => {
-      const dateTimeStr = format(msg.date, 'MMM dd, yyyy HH:mm');
-      return (
-        <MessagePlaceholder
-          key={msg.id}
-          isNew={msg.isNew}
-          animationType={msg.animation}
-          onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
-        >
-          <MessageComponent message={msg} dateTime={dateTimeStr} />
-        </MessagePlaceholder>
-      );
-    },
-    [markMessageAsFinal]
-  );
-
-  // Initialize PIXI + circle texture once
-  useEffect(() => {
-    if (!window.pixiApp) {
-      const canvasWidth = window.innerWidth;
-      const canvasHeight = window.innerHeight;
-
-      window.pixiApp = new PIXI.Application({
-        width: canvasWidth,
-        height: canvasHeight,
-        resolution: window.devicePixelRatio || 1,
-        autoDensity: true,
-        transparent: true,
-      });
-
-      const pixiContainer = document.getElementById('pixi-container');
-      if (!pixiContainer) {
-        console.error('PIXI container not found! Materialize effect will not work.');
-        return;
-      }
-      pixiContainer.appendChild(window.pixiApp.view);
-
-      // Create ParticleContainer for the dot sprites
-      window.dots = new PIXI.ParticleContainer(2000, {
-        scale: true,
-        position: true,
-        alpha: true,
-        tint: true,
-      });
-      window.dots.blendMode = PIXI.BLEND_MODES.ADD;
-      window.pixiApp.stage.addChild(window.dots);
-
-      // Draw a base circle in Graphics -> texture
-      const baseRadius = 6;
-      window.baseRadius = baseRadius;
-      const circleGfx = new PIXI.Graphics();
-      circleGfx.beginFill(0xffffff);
-      circleGfx.drawCircle(0, 0, baseRadius);
-      circleGfx.endFill();
-      window.circleTexture = window.pixiApp.renderer.generateTexture(circleGfx);
-    }
-
-    // Cleanup when unmounting
-    return () => {
-      if (window.pixiApp) {
-        if (window.dots) {
-          window.dots.removeChildren();
-          window.dots.destroy({ children: true });
-          window.dots = null;
-        }
-        window.pixiApp.destroy(true, { children: true, texture: true, baseTexture: true });
-        window.pixiApp = null;
-
-        const pixiContainer = document.getElementById('pixi-container');
-        if (pixiContainer) {
-          pixiContainer.innerHTML = '';
-        }
-      }
+    const newMessage = {
+	id,
+	date: now,
+	isNew: true,
+	type,
+	animation,
     };
-  }, []);
 
-  return (
-    <StyleSheetManager shouldForwardProp={(prop) => prop !== 'exiting'}>
-      <Background />
-      <PixiContainer id="pixi-container" />
+    switch (type) {
+    case "chat":
+	newMessage.text = "New Chat: This is a new chat message.";
+	break;
+    case "event":
+	newMessage.text = "New Event: A new event occurred.";
+	break;
+    case "action":
+	newMessage.text = "New Action: An action just took place.";
+	break;
+    case "error":
+	newMessage.text = "New Error: Something went wrong!";
+	break;
+    default:
+	newMessage.text = "Unknown message type.";
+    }
+    return newMessage;
+}
 
-      <ButtonBar style={{ flexDirection: 'column' }}>
-        <div style={{ display: 'flex', flexDirection: 'row', gap: '10px', marginBottom: '10px' }}>
-          <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-            {messageTypes.map((typeItem) => (
-              <option key={typeItem} value={typeItem}>
-                {typeItem}
-              </option>
-            ))}
-          </select>
-          <select value={selectedAnimation} onChange={(e) => setSelectedAnimation(e.target.value)}>
-            {animations.map((anim) => (
-              <option key={anim} value={anim}>
-                {anim}
-              </option>
-            ))}
-          </select>
-        </div>
-        <StyledButton onClick={addRandomMessage}>Add Message</StyledButton>
-      </ButtonBar>
+// ---------- Main DemoPage ----------
+export default function DemoPage() {
+    const [messages, setMessages] = useState(() => {
+	const now = new Date();
+	const initialMessages = [];
+	for (let i = 0; i < 5; i++) {
+	    const type = messageTypes[Math.floor(Math.random() * messageTypes.length)];
+	    const animation =
+		  animations[Math.floor(Math.random() * animations.length)];
+	    const message = {
+		id: i + 1,
+		date: new Date(now.getTime() - i * 60000),
+		isNew: false,
+		type,
+		animation,
+	    };
+	    if (type === "chat") {
+		message.text = `Message ${i}: This is a demo chat message.`;
+	    } else if (type === "event") {
+		message.text = `Message ${i}: An event occurred.`;
+	    } else if (type === "action") {
+		message.text = `Message ${i}: An action took place.`;
+	    } else if (type === "error") {
+		message.text = `Message ${i}: Something went wrong!`;
+	    }
+	    initialMessages.push(message);
+	}
+	return initialMessages;
+    });
 
-      <PageContainer>
-        <EventScroller>{messages.map(renderMessage)}</EventScroller>
-      </PageContainer>
-    </StyleSheetManager>
-  );
-};
+    const nextIdRef = useRef(6);
+    const [selectedType, setSelectedType] = useState("event");
+    const [selectedAnimation, setSelectedAnimation] = useState("materialize");
 
-export default DemoPage;
+    const addRandomMessage = useCallback(() => {
+	const newMessage = createRandomMessage(
+	    nextIdRef.current++,
+	    selectedType,
+	    selectedAnimation
+	);
+	setMessages((prev) => [newMessage, ...prev]);
+    }, [selectedType, selectedAnimation]);
+
+    const markMessageAsFinal = useCallback((id) => {
+	setMessages((prev) =>
+	    prev.map((msg) => (msg.id === id ? { ...msg, isNew: false } : msg))
+	);
+    }, []);
+
+    const renderMessage = useCallback(
+	(msg) => {
+	    const dateTimeStr = format(msg.date, "MMM dd, yyyy HH:mm");
+	    return (
+		<MessagePlaceholder
+		    key={msg.id}
+		    isNew={msg.isNew}
+		    animationType={msg.animation}
+		    onAnimationComplete={() => msg.isNew && markMessageAsFinal(msg.id)}
+		>
+		    <MessageComponent message={msg} dateTime={dateTimeStr} />
+		</MessagePlaceholder>
+	    );
+	},
+	[markMessageAsFinal]
+    );
+
+    useEffect(() => {
+	if (!window.pixiApp) {
+	    const canvasWidth = window.innerWidth;
+	    const canvasHeight = window.innerHeight;
+	    window.pixiApp = new PIXI.Application({
+		width: canvasWidth,
+		height: canvasHeight,
+		resolution: window.devicePixelRatio || 1,
+		autoDensity: true,
+		transparent: true,
+	    });
+
+	    const pixiContainer = document.getElementById("pixi-container");
+	    if (!pixiContainer) {
+		console.error(
+		    "PIXI container not found! Materialize effect will not work."
+		);
+		return;
+	    }
+	    pixiContainer.appendChild(window.pixiApp.view);
+
+	    window.dots = new PIXI.particles.ParticleContainer(5000, {
+		scale: true,
+		position: true,
+		alpha: true,
+		tint: true,
+	    });
+	    window.dots.blendMode = PIXI.BLEND_MODES.ADD;
+	    window.pixiApp.stage.addChild(window.dots);
+
+	    const baseRadius = 6;
+	    window.baseRadius = baseRadius;
+	    const circleGfx = new PIXI.Graphics();
+	    circleGfx.beginFill(0xffffff);
+	    circleGfx.drawCircle(0, 0, baseRadius);
+	    circleGfx.endFill();
+	    window.circleTexture = window.pixiApp.renderer.generateTexture(
+		circleGfx
+	    );
+	}
+
+	return () => {
+	    if (window.pixiApp) {
+		if (window.dots) {
+		    window.dots.removeChildren();
+		    window.dots.destroy({ children: true });
+		    window.dots = null;
+		}
+		window.pixiApp.destroy(true, {
+		    children: true,
+		    texture: true,
+		    baseTexture: true,
+		});
+		window.pixiApp = null;
+
+		const pixiContainer = document.getElementById("pixi-container");
+		if (pixiContainer) {
+		    pixiContainer.innerHTML = "";
+		}
+	    }
+	};
+    }, []);
+
+    return (
+	<StyleSheetManager
+	    shouldForwardProp={(prop) =>
+		!["animate", "animationType", "initialOpacity", "initialTransform"].includes(
+		    prop
+		)
+	    }
+	>
+	    <Background />
+	    <PixiContainer id="pixi-container" />
+
+	    <ButtonBar style={{ flexDirection: "column" }}>
+		<div
+		    style={{
+			display: "flex",
+			flexDirection: "row",
+			gap: "10px",
+			marginBottom: "10px",
+		    }}
+		>
+		    <select
+			value={selectedType}
+			onChange={(e) => setSelectedType(e.target.value)}
+		    >
+			{messageTypes.map((typeItem) => (
+			    <option key={typeItem} value={typeItem}>
+				{typeItem}
+			    </option>
+			))}
+		    </select>
+		    <select
+			value={selectedAnimation}
+			onChange={(e) => setSelectedAnimation(e.target.value)}
+		    >
+			{animations.map((anim) => (
+			    <option key={anim} value={anim}>
+				{anim}
+			    </option>
+			))}
+		    </select>
+		</div>
+		<StyledButton onClick={addRandomMessage}>Add Message</StyledButton>
+	    </ButtonBar>
+
+	    <PageContainer>
+		<EventScroller>{messages.map(renderMessage)}</EventScroller>
+	    </PageContainer>
+	</StyleSheetManager>
+    );
+}
