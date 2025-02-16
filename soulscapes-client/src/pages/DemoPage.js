@@ -11,9 +11,7 @@ import { slog, serror } from "../../../shared/slogger.js";
 // Import components and helpers.
 import { 
   EventPane, 
-  EventAnimationPlaceholder, 
   EventComponent, 
-  createRandomEvent 
 } from "../components/EventPane";
 import { InstalledAnimations } from "../components/AnimationManager";
 
@@ -112,13 +110,13 @@ export default function DemoPage() {
   const [selectedCreationAnimation, setSelectedCreationAnimation] = useState("zipUp");
 
   const addRandomEvent = useCallback(() => {
-    const newEvent = createRandomEvent(
-      nextIdRef.current++,
-      selectedType,
-      selectedCreationAnimation
-    );
-    setEvents((prev) => [newEvent, ...prev]);
-    slog("DemoPage", `Added new event (id: ${newEvent.id}) of type ${newEvent.type}.`);
+    // const newEvent = createRandomEvent(
+    //   nextIdRef.current++,
+    //   selectedType,
+    //   selectedCreationAnimation
+    // );
+    //setEvents((prev) => [newEvent, ...prev]);
+    //slog("DemoPage", `Added new event (id: ${newEvent.id}) of type ${newEvent.type}.`);
   }, [selectedType, selectedCreationAnimation]);
 
   const markEventAsFinal = useCallback((id) => {
@@ -128,22 +126,22 @@ export default function DemoPage() {
     slog("DemoPage", `Event (id: ${id}) animation completed.`);
   }, []);
 
-  const renderEvent = useCallback(
-    (evt) => {
-      const dateTimeStr = format(evt.date, "MMM dd, yyyy HH:mm");
-      return (
-        <EventAnimationPlaceholder
-          key={evt.id}
-          isNew={evt.isNew}
-          creationAnimation={evt.creationAnimation}
-          onAnimationComplete={() => evt.isNew && markEventAsFinal(evt.id)}
-        >
-          <EventComponent event={evt} dateTime={dateTimeStr} />
-        </EventAnimationPlaceholder>
-      );
-    },
-    [markEventAsFinal]
-  );
+  // const renderEvent = useCallback(
+  //   (evt) => {
+  //     const dateTimeStr = format(evt.date, "MMM dd, yyyy HH:mm");
+  //     return (
+  //       <EventAnimationPlaceholder
+  //         key={evt.id}
+  //         isNew={evt.isNew}
+  //         creationAnimation={evt.creationAnimation}
+  //         onAnimationComplete={() => evt.isNew && markEventAsFinal(evt.id)}
+  //       >
+  //         <EventComponent event={evt} dateTime={dateTimeStr} />
+  //       </EventAnimationPlaceholder>
+  //     );
+  //   },
+  //   [markEventAsFinal]
+  // );
 
   // Initialize PIXI with robust error handling.
   useEffect(() => {
@@ -249,7 +247,7 @@ export default function DemoPage() {
         <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
       </ButtonBar>
       <PageContainer>
-        <EventPane>{events.map(renderEvent)}</EventPane>
+        <EventPane>{/*events.map(renderEvent)*/}</EventPane>
       </PageContainer>
     </>
   );

@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
-import styled from '@emotion/styled';
-import { List, ChatTeardropText, Users } from '@phosphor-icons/react';
-import DividedLayout from '../components/DividedLayout';
-import { EventPane } from '../components/EventPane';
-import Avatar from '../components/Avatar';
-import ScrollLayout from '../components/ScrollLayout';
-import AvatarClusterLayout from '../components/AvatarClusterLayout';
-import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout';
-import CommandLine from '../components/CommandLine';
+import React, { useState, useRef, useEffect } from "react";
+import styled from "@emotion/styled";
+import { List, ChatTeardropText, Users } from "@phosphor-icons/react";
+import DividedLayout from "../components/DividedLayout";
+import { EventPane } from "../components/EventPane";
+import Avatar from "../components/Avatar";
+import ScrollLayout from "../components/ScrollLayout";
+import AvatarClusterLayout from "../components/AvatarClusterLayout";
+import AvatarHorizontalGridLayout from "../components/AvatarHorizontalGridLayout";
+import CommandLine from "../components/CommandLine";
 
 import spotManager from "../services/SpotManager";
 import localAvatarManager from "../services/LocalAvatarManager";
@@ -63,14 +63,6 @@ const MainContent = styled.div`
   overflow: hidden;
 `;
 
-const MessageArea = styled.div`
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`;
-
 const AvatarClusterContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -91,7 +83,7 @@ const SideMenu = styled.div`
   width: 250px;
   height: calc(100vh - 70px); /* 30px for title bar, 40px for command line */
   background-color: rgba(0, 0, 0, 0.8);
-  transform: translateX(${(props) => (props.open ? '0' : '-100%')});
+  transform: translateX(${(props) => (props.open ? "0" : "-100%")});
   transition: transform 0.3s ease;
   z-index: 999;
   color: #fff;
@@ -109,28 +101,30 @@ const Spot = () => {
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const hasJoined = useRef(false); // Prevent duplicate joins
+  const hasJoined = useRef(false);
   useEffect(() => {
     if (!hasJoined.current) {
       spotManager.joinSpot("lobby");
       hasJoined.current = true;
     }
-    
-    // Listen for connection status updates
+
     const updateStatus = (status) => setConnectionStatus(status);
     localAvatarManager.on("statusChanged", updateStatus);
-    
     return () => {
       localAvatarManager.off("statusChanged", updateStatus);
     };
   }, []);
 
-  const [avatars, setAvatars] = useState(remoteAvatarManager.getAvatarsForCurrentRoom());
-  const [localAvatar, setLocalAvatar] = useState(localAvatarManager.getAvatarData());
+  const [avatars, setAvatars] = useState(
+    remoteAvatarManager.getAvatarsForCurrentRoom()
+  );
+  const [localAvatar, setLocalAvatar] = useState(
+    localAvatarManager.getAvatarData()
+  );
 
   useEffect(() => {
     const updateAvatars = () => {
@@ -143,7 +137,6 @@ const Spot = () => {
 
     remoteAvatarManager.on("updated", updateAvatars);
     localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
-
     return () => {
       remoteAvatarManager.off("updated", updateAvatars);
       localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
@@ -152,19 +145,12 @@ const Spot = () => {
 
   const toggleMenu = () => setMenuOpen((prev) => !prev);
 
-  // Render the message area (left pane).
-  const renderMessageArea = () => (
-    <EventPane>
-      {/* Message events go here */}
-    </EventPane>
-  );
+  // Render the message area using EventPane (which now manages events via EventManager).
+  const renderMessageArea = () => <EventPane />;
 
-  // Render the avatar area (right pane), split horizontally:
-  // - Top: 80% for the cluster layout
-  // - Bottom: 20% for the horizontal grid layout
+  // Render the avatar area.
   const renderAvatarArea = () => (
     <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
-      {/* Top (80%) - Cluster */}
       <AvatarClusterContainer>
         <ScrollLayout>
           <AvatarClusterLayout avatarSize={80}>
@@ -174,8 +160,6 @@ const Spot = () => {
           </AvatarClusterLayout>
         </ScrollLayout>
       </AvatarClusterContainer>
-
-      {/* Bottom (20%) - Horizontal Grid */}
       <AvatarGridContainer>
         <ScrollLayout top={false} bottom={false}>
           <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
@@ -191,9 +175,7 @@ const Spot = () => {
     </DividedLayout>
   );
 
-  // Desktop layout: side-by-side vertical DividedLayout:
-  // - Left = Message Area
-  // - Right = Avatar Area
+  // Desktop layout: side-by-side vertical DividedLayout.
   const renderDesktopContent = () => (
     <DividedLayout
       orientation="vertical"
@@ -210,21 +192,14 @@ const Spot = () => {
 
   return (
     <SpotContainer>
-      {/* Title Bar */}
       <TitleBar>
         <Hamburger onClick={toggleMenu} aria-label="Toggle menu">
           <List size={24} weight="regular" color="#fff" />
         </Hamburger>
         <TitleText>Lobby</TitleText>
       </TitleBar>
-
-      {/* Main Content Area */}
       <MainContent>{renderDesktopContent()}</MainContent>
-
-      {/* Command Line */}
       <CommandLine />
-
-      {/* Side Menu */}
       <SideMenu open={menuOpen}>
         <h4>Side Menu</h4>
         <p>Menu content or navigation links can go here.</p>

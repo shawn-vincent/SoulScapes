@@ -1,12 +1,12 @@
 /** @jsxImportSource @emotion/react */
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import styled from "@emotion/styled";
-import { css } from "@emotion/react";
 import { format } from "date-fns";
 import { InstalledAnimations } from "./AnimationManager";
+import eventManager from "../services/EventManager";
 
-// DEBUG flag for development.
-const DEBUG = false;
+// Import BaseCommand and CommandRegistry from CommandLine.
+import { BaseCommand, CommandRegistry } from "./CommandLine";
 
 // -----------------------------------------------------------------------
 // Styled Components for Events
@@ -16,7 +16,7 @@ const EventBase = styled.div`
 `;
 
 export const MessageEvent = styled(EventBase)`
-  border: ${DEBUG ? "2px solid limegreen" : "none"};
+  border: ${props => props.DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px;
   padding: 10px;
   color: #000;
@@ -36,7 +36,7 @@ export const MessageEvent = styled(EventBase)`
 `;
 
 export const InfoEvent = styled(EventBase)`
-  border: ${DEBUG ? "2px solid limegreen" : "none"};
+  border: ${props => props.DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px auto;
   padding: 10px;
   text-align: center;
@@ -48,7 +48,7 @@ export const InfoEvent = styled(EventBase)`
 `;
 
 export const ActionEvent = styled(EventBase)`
-  border: ${DEBUG ? "2px solid limegreen" : "none"};
+  border: ${props => props.DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px auto;
   padding: 10px;
   text-align: center;
@@ -60,7 +60,7 @@ export const ActionEvent = styled(EventBase)`
 `;
 
 export const ErrorEvent = styled(EventBase)`
-  border: ${DEBUG ? "2px solid limegreen" : "none"};
+  border: ${props => props.DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px;
   padding: 10px;
   background-color: rgba(255, 0, 0, 0.8);
@@ -87,8 +87,7 @@ const AnimatedEventContainer = styled.div`
   position: relative;
   z-index: 3;
   opacity: ${(props) => (props.isAnimated ? 1 : props.initialOpacity)};
-  transform: ${(props) =>
-    props.isAnimated ? "none" : props.initialTransform};
+  transform: ${(props) => (props.isAnimated ? "none" : props.initialTransform)};
   transition: opacity 2s ease-out, transform 2s ease-out;
   ${(props) =>
     props.animation && props.isAnimated ? props.animation.getCSS() : ""}
@@ -102,10 +101,10 @@ const EventPanelScrollContainer = styled.div`
   display: flex;
   flex-direction: column;
   background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.6),
-      rgba(255, 255, 255, 0.2)
-    );
+    135deg,
+    rgba(255, 255, 255, 0.6),
+    rgba(255, 255, 255, 0.2)
+  );
   border-radius: 10px;
   padding: 0;
   margin: 0;
@@ -129,83 +128,8 @@ const EventPanelContent = styled.div`
 `;
 
 // -----------------------------------------------------------------------
-// Event Animation Placeholder
+// Event Component
 // -----------------------------------------------------------------------
-export const EventAnimationPlaceholder = ({
-  isNew,
-  creationAnimation,
-  children,
-  onAnimationComplete,
-}) => {
-  const [height, setHeight] = useState(isNew ? 0 : 80);
-  const [isAnimated, setIsAnimated] = useState(false);
-  const eventRef = useRef(null);
-  const childWithRef = React.cloneElement(
-    React.Children.only(children),
-    { ref: eventRef }
-  );
-
-  const animation = InstalledAnimations[creationAnimation] || null;
-  const initialStyle =
-    isNew && animation
-      ? animation.initialStyle
-      : { opacity: 1, transform: "none" };
-
-  // Use the animation's own duration.
-  const effectTime = animation ? animation.getEffectDuration() : 800;
-
-  const startAnimation = useCallback(() => {
-    setHeight(80);
-    setIsAnimated(true);
-    if (animation && typeof animation.runEffect === "function") {
-      animation.runEffect(eventRef.current);
-    }
-    const timer = setTimeout(() => {
-      if (onAnimationComplete) onAnimationComplete();
-    }, effectTime);
-    return () => clearTimeout(timer);
-  }, [effectTime, onAnimationComplete, animation]);
-
-  useEffect(() => {
-    if (isNew) {
-      startAnimation();
-    }
-  }, [isNew, startAnimation]);
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        height,
-        transition: "height 0.5s ease-out",
-      }}
-    >
-      <AnimatedEventContainer
-        isAnimated={isAnimated}
-        animation={animation}
-        initialOpacity={initialStyle.opacity}
-        initialTransform={initialStyle.transform}
-      >
-        {childWithRef}
-      </AnimatedEventContainer>
-    </div>
-  );
-};
-
-// -----------------------------------------------------------------------
-// Event Panel & Event Component
-// -----------------------------------------------------------------------
-export function EventPane({ children }) {
-  const scrollableContentRef = useRef(null);
-  return (
-    <EventPanelScrollContainer>
-      <EventPanelContent ref={scrollableContentRef}>
-        {children}
-      </EventPanelContent>
-    </EventPanelScrollContainer>
-  );
-}
-
 export const EventComponent = React.forwardRef(
   ({ event, dateTime }, ref) => {
     switch (event.type) {
@@ -232,32 +156,65 @@ export const EventComponent = React.forwardRef(
 );
 
 // -----------------------------------------------------------------------
-// Helper: Create a Random Event
+// EventPane Component
 // -----------------------------------------------------------------------
-export function createRandomEvent(id, type, creationAnimation) {
-  const now = new Date();
-  const newEvent = {
-    id,
-    date: now,
-    isNew: true,
-    type,
-    creationAnimation,
-  };
-  switch (type) {
-    case "chatMessageEvent":
-      newEvent.text = "New Chat: This is a new chat message.";
-      break;
-    case "infoEvent":
-      newEvent.text = "New Event: A new event occurred.";
-      break;
-    case "actionEvent":
-      newEvent.text = "New Action: An action just took place.";
-      break;
-    case "errorEvent":
-      newEvent.text = "New Error: Something went wrong!";
-      break;
-    default:
-      newEvent.text = "Unknown event type.";
+export function EventPane() {
+  // Subscribe to events from EventManager.
+  const [events, setEvents] = useState(eventManager.getEvents());
+
+  useEffect(() => {
+    const listener = (newEvents) => {
+      setEvents(newEvents);
+    };
+    eventManager.subscribe(listener);
+    return () => {
+      eventManager.unsubscribe(listener);
+    };
+  }, []);
+
+  return (
+    <EventPanelScrollContainer>
+      <EventPanelContent>
+        {events.map((event) => (
+          <React.Fragment key={event.id}>
+            <EventComponent
+              event={event}
+              dateTime={format(event.date, "hh:mm:ss")}
+            />
+          </React.Fragment>
+        ))}
+      </EventPanelContent>
+    </EventPanelScrollContainer>
+  );
+}
+
+// -----------------------------------------------------------------------
+// ChatCommand: Default Command to Create a Chat Message Event
+// -----------------------------------------------------------------------
+export class ChatCommand extends BaseCommand {
+  constructor() {
+    super("chat");
   }
-  return newEvent;
+
+  /**
+   * Execute the command to create a new chat message event.
+   * @param {string} fullText - The full text of the input.
+   */
+  execute(fullText) {
+    const newEvent = {
+      id: Date.now(),
+      date: new Date(),
+      isNew: true,
+      type: "chatMessageEvent",
+      text: fullText, // Optionally strip a leading "/" if desired.
+      creationAnimation: null,
+    };
+    eventManager.addEvent(newEvent);
+  }
+}
+
+// Register ChatCommand as the default command.
+// We run this registration when the module is loaded.
+if (typeof window !== "undefined") {
+  CommandRegistry.registerDefault(new ChatCommand());
 }
