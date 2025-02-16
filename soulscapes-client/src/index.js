@@ -1,14 +1,13 @@
-import * as PIXI from 'pixi.js'; // Make PIXI globally available IMMEDIATELY after importing.
+//import * as PIXI from 'pixi.js'; // Make PIXI globally available IMMEDIATELY after importing.
 
 import { slog, serror, sdebug, swarn, slogConfig } from '../../shared/slogger.js';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import Room from './pages/Room';
 import ErrorBoundary from './components/ErrorBoundary';
 
-window.PIXI = PIXI;  //This must be after all imports
+//window.PIXI = PIXI;  //This must be after all imports
 
 
 slogConfig({
