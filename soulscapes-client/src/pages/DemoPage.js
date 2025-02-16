@@ -1,242 +1,396 @@
-import React, {
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
-import styled, { StyleSheetManager, keyframes, css } from "styled-components";
+/** @jsxImportSource @emotion/react */
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import styled from "@emotion/styled";
+import { css, keyframes } from "@emotion/react";
 import { format } from "date-fns";
 import * as PIXI from "pixi.js";
 // Import the regular slogger logging functions.
 import { slog, serror, sdebug, swarn } from "../../../shared/slogger.js";
 
+// DEBUG flag: set to true to show green borders on events.
+const DEBUG = false;
+
 /* =======================================================================
-   AnimationType Class & Registry
-   -----------------------------------------------------------------------
-   Each animation type is encapsulated in a single JavaScript object.
-   An instance of AnimationType contains:
-     - name: Unique identifier.
-     - keyframes: A styled-components keyframes definition.
-     - duration: Duration (in seconds).
-     - initialStyle: The style (opacity/transform) to apply initially.
-     - getCSS(): A method that returns the CSS for applying the animation.
-   New animations can be added simply by creating a new instance and
-   installing it into InstalledAnimations.
+   Helper: Convert hex color to rgba with a given alpha
    ======================================================================= */
-class AnimationType {
+function hexToRGBA(hex, alpha) {
+  hex = hex.replace("#", "");
+  let r, g, b;
+  if (hex.length === 3) {
+    r = parseInt(hex[0] + hex[0], 16);
+    g = parseInt(hex[1] + hex[1], 16);
+    b = parseInt(hex[2] + hex[2], 16);
+  } else if (hex.length === 6) {
+    r = parseInt(hex.substr(0, 2), 16);
+    g = parseInt(hex.substr(2, 2), 16);
+    b = parseInt(hex.substr(4, 2), 16);
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/* =======================================================================
+   BaseAnimation and Subclasses
+   -----------------------------------------------------------------------
+   Each animation type encapsulates its own details (including keyframes)
+   so that nothing is needed outside the type.
+   ======================================================================= */
+class BaseAnimation {
   constructor({ name, keyframes, duration, initialStyle }) {
     this.name = name;
-    this.keyframes = keyframes;
-    this.duration = duration;
+    this.keyframes = keyframes; // defined internally in the subclass
+    this.duration = duration;   // in seconds
     this.initialStyle = initialStyle;
   }
   getCSS() {
-    // Returns CSS for applying the keyframes animation.
     return css`
       animation: ${this.keyframes} ${this.duration}s ease-out forwards;
     `;
   }
+  // By default, no side effect.
+  runEffect(ref) {}
 }
 
-// Duration constants
-const FADE_DURATION = 2.0;
-const FLOAT_DURATION = 2.0;
-const DROP_DURATION = 0.5;
-const ZIP_DURATION = 0.4;
-const FLICKER_DURATION = 1.5;
-const MATERIALIZE_DURATION = FADE_DURATION * 0.33;
+class FadeAnimation extends BaseAnimation {
+  constructor() {
+    const fadeKeyframes = keyframes`
+      from { opacity: 0; }
+      to { opacity: 1; }
+    `;
+    super({
+      name: "fade",
+      keyframes: fadeKeyframes,
+      duration: 2.0,
+      initialStyle: { opacity: 0, transform: "none" },
+    });
+  }
+}
 
-// Define keyframes
-const fadeKeyframes = keyframes`
-  from { opacity: 0; }
-  to { opacity: 1; }
-`;
+class FloatAnimation extends BaseAnimation {
+  constructor() {
+    const floatKeyframes = keyframes`
+      0% {
+        transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
+        opacity: 0;
+      }
+      40% {
+        transform: translateY(-55vh) translateX(-20vw) rotate(10deg);
+        opacity: 0.75;
+      }
+      65% {
+        transform: translateY(-10vh) translateX(10vw) rotate(-5deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(0) translateX(0) rotate(0deg);
+        opacity: 1;
+      }
+    `;
+    super({
+      name: "float",
+      keyframes: floatKeyframes,
+      duration: 2.0,
+      initialStyle: {
+        opacity: 0,
+        transform: "translateY(-100vh) translateX(10vw) rotate(10deg)",
+      },
+    });
+  }
+}
 
-const floatKeyframes = keyframes`
-  0% {
-    transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
-    opacity: 0;
+class FlickerAnimation extends BaseAnimation {
+  constructor() {
+    const flickerKeyframes = keyframes`
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      20% { opacity: 0; }
+      30% { opacity: 1; }
+      40% { opacity: 0; }
+      50% { opacity: 1; }
+      60% { opacity: 0.3; }
+      70% { opacity: 0.8; }
+      80% { opacity: 0.4; }
+      90% { opacity: 0.9; }
+      100% { opacity: 1; }
+    `;
+    super({
+      name: "flicker",
+      keyframes: flickerKeyframes,
+      duration: 1.5,
+      initialStyle: { opacity: 0.2, transform: "none" },
+    });
   }
-  40% {
-    transform: translateY(-55vh) translateX(-20vw) rotate(10deg);
-    opacity: 0.75;
-  }
-  65% {
-    transform: translateY(-10vh) translateX(10vw) rotate(-5deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0) translateX(0) rotate(0deg);
-    opacity: 1;
-  }
-`;
+}
 
-const flickerKeyframes = keyframes`
-  0% { opacity: 0; }
-  10% { opacity: 1; }
-  20% { opacity: 0; }
-  30% { opacity: 1; }
-  40% { opacity: 0; }
-  50% { opacity: 1; }
-  60% { opacity: 0.3; }
-  70% { opacity: 0.8; }
-  80% { opacity: 0.4; }
-  90% { opacity: 0.9; }
-  100% { opacity: 1; }
-`;
+class DropAnimation extends BaseAnimation {
+  constructor() {
+    const dropKeyframes = keyframes`
+      0% {
+        transform: translateY(-120vh) rotate(0deg);
+      }
+      70% {
+        transform: translateY(0) rotate(0deg);
+      }
+      80% {
+        transform: translateY(-3vh) rotate(5deg);
+      }
+      100% {
+        transform: translateY(0) rotate(0deg);
+      }
+    `;
+    super({
+      name: "drop",
+      keyframes: dropKeyframes,
+      duration: 0.8,
+      initialStyle: { opacity: 1, transform: "translateY(-120vh)" },
+    });
+  }
+}
 
-const dropKeyframes = keyframes`
-  0% {
-    transform: translateY(-120vh) rotate(0deg);
+class ZipUpAnimation extends BaseAnimation {
+  constructor() {
+    const zipUpKeyframes = keyframes`
+      0% {
+        transform: translateY(100vh);
+        opacity: 0;
+      }
+      80% {
+        transform: translateY(-5vh);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    `;
+    super({
+      name: "zipUp",
+      keyframes: zipUpKeyframes,
+      duration: 0.4,
+      initialStyle: { opacity: 0, transform: "translateY(100vh)" },
+    });
   }
-  70% {
-    transform: translateY(0) rotate(0deg);
-  }
-  80% {
-    transform: translateY(-3vh) rotate(5deg);
-  }
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-`;
+}
 
-const zipUpKeyframes = keyframes`
-  0% {
-    transform: translateY(100vh);
-    opacity: 0;
+class ZipDownAnimation extends BaseAnimation {
+  constructor() {
+    const zipDownKeyframes = keyframes`
+      0% {
+        transform: translateY(-100vh);
+        opacity: 0;
+      }
+      80% {
+        transform: translateY(5vh);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    `;
+    super({
+      name: "zipDown",
+      keyframes: zipDownKeyframes,
+      duration: 0.4,
+      initialStyle: { opacity: 0, transform: "translateY(-100vh)" },
+    });
   }
-  80% {
-    transform: translateY(-5vh);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-`;
+}
 
-const zipDownKeyframes = keyframes`
-  0% {
-    transform: translateY(-100vh);
-    opacity: 0;
+class ZipRightAnimation extends BaseAnimation {
+  constructor() {
+    const zipRightKeyframes = keyframes`
+      0% {
+        transform: translateX(-100vw);
+        opacity: 0;
+      }
+      80% {
+        transform: translateX(5vw);
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    `;
+    super({
+      name: "zipRight",
+      keyframes: zipRightKeyframes,
+      duration: 0.4,
+      initialStyle: { opacity: 0, transform: "translateX(-100vw)" },
+    });
   }
-  80% {
-    transform: translateY(5vh);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-`;
+}
 
-const zipRightKeyframes = keyframes`
-  0% {
-    transform: translateX(-100vw);
-    opacity: 0;
+class ZipLeftAnimation extends BaseAnimation {
+  constructor() {
+    const zipLeftKeyframes = keyframes`
+      0% {
+        transform: translateX(100vw);
+        opacity: 0;
+      }
+      80% {
+        transform: translateX(-5vw);
+        opacity: 1;
+      }
+      100% {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    `;
+    super({
+      name: "zipLeft",
+      keyframes: zipLeftKeyframes,
+      duration: 0.4,
+      initialStyle: { opacity: 0, transform: "translateX(100vw)" },
+    });
   }
-  80% {
-    transform: translateX(5vw);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 1;
-  }
-`;
+}
 
-const zipLeftKeyframes = keyframes`
-  0% {
-    transform: translateX(100vw);
-    opacity: 0;
-  }
-  80% {
-    transform: translateX(-5vw);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(0);
-    opacity: 1;
-  }
-`;
+const MATERIALIZE_DURATION = 0.66; // seconds
 
-// InstalledAnimations registry.
-// Each property is an instance of AnimationType.
-// The "materialize" effect is special and will be handled separately.
-const InstalledAnimations = {
-  fade: new AnimationType({
-    name: "fade",
-    keyframes: fadeKeyframes,
-    duration: FADE_DURATION,
-    initialStyle: { opacity: 0, transform: "none" },
-  }),
-  float: new AnimationType({
-    name: "float",
-    keyframes: floatKeyframes,
-    duration: FLOAT_DURATION,
-    initialStyle: { opacity: 0, transform: "translateY(-100vh) translateX(10vw) rotate(10deg)" },
-  }),
-  flicker: new AnimationType({
-    name: "flicker",
-    keyframes: flickerKeyframes,
-    duration: FLICKER_DURATION,
-    initialStyle: { opacity: 0.2, transform: "none" },
-  }),
-  drop: new AnimationType({
-    name: "drop",
-    keyframes: dropKeyframes,
-    duration: DROP_DURATION,
-    initialStyle: { opacity: 1, transform: "translateY(-120vh)" },
-  }),
-  zipUp: new AnimationType({
-    name: "zipUp",
-    keyframes: zipUpKeyframes,
-    duration: ZIP_DURATION,
-    initialStyle: { opacity: 0, transform: "translateY(100vh)" },
-  }),
-  zipDown: new AnimationType({
-    name: "zipDown",
-    keyframes: zipDownKeyframes,
-    duration: ZIP_DURATION,
-    initialStyle: { opacity: 0, transform: "translateY(-100vh)" },
-  }),
-  zipRight: new AnimationType({
-    name: "zipRight",
-    keyframes: zipRightKeyframes,
-    duration: ZIP_DURATION,
-    initialStyle: { opacity: 0, transform: "translateX(-100vw)" },
-  }),
-  zipLeft: new AnimationType({
-    name: "zipLeft",
-    keyframes: zipLeftKeyframes,
-    duration: ZIP_DURATION,
-    initialStyle: { opacity: 0, transform: "translateX(100vw)" },
-  }),
-  // "materialize" will be handled separately.
-};
+class MaterializeAnimation extends BaseAnimation {
+  constructor() {
+    const fadeKeyframes = keyframes`
+      from { opacity: 0; }
+      to { opacity: 1; }
+    `;
+    super({
+      name: "materialize",
+      keyframes: fadeKeyframes,
+      duration: MATERIALIZE_DURATION,
+      initialStyle: { opacity: 0, transform: "none" },
+    });
+  }
+  runEffect(ref) {
+    const duration = this.duration * 1000;
+    if (ref && window.pixiApp && window.dots) {
+      const totalDots = 800;
+      const maxDelay = duration * 0.3;
+      const dotsData = [];
+      const screenWidth = window.pixiApp.renderer.width;
+      const screenHeight = window.pixiApp.renderer.height;
+      const circleRadius = Math.max(screenWidth, screenHeight) * 0.9;
+      const rect = ref.getBoundingClientRect();
+      const scrollX = window.scrollX || window.pageXOffset;
+      const scrollY = window.scrollY || window.pageYOffset;
+      for (let i = 0; i < totalDots; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const r = Math.sqrt(Math.random()) * circleRadius;
+        const startX = screenWidth / 2 + r * Math.cos(angle);
+        const startY = screenHeight / 2 + r * Math.sin(angle);
+        const delay = Math.random() * maxDelay;
+        const dotInnerRadius = 0.8;
+        const innerR = dotInnerRadius + Math.random() * 0.3;
+        const targetDomX = rect.left + Math.random() * rect.width + scrollX;
+        const targetDomY = rect.top + Math.random() * rect.height + scrollY;
+        const targetPoint = new PIXI.Point();
+        window.pixiApp.renderer.plugins.interaction.mapPositionToPoint(
+          targetPoint,
+          targetDomX,
+          targetDomY
+        );
+        const { x: endX, y: endY } = targetPoint;
+        dotsData.push({ startX, startY, endX, endY, delay, innerR });
+      }
+      const dotPool = [];
+      const cleanupDots = () => {
+        if (window.dots) {
+          window.dots.removeChildren();
+        }
+        dotPool.forEach((sprite) => {
+          if (sprite && sprite.destroy) sprite.destroy();
+        });
+      };
+      const startTime = performance.now();
+      const animateDots = () => {
+        const elapsed = performance.now() - startTime;
+        for (let i = 0; i < totalDots; i++) {
+          let dotSprite = dotPool[i];
+          if (!dotSprite) {
+            dotSprite = new PIXI.Sprite(window.circleTexture);
+            dotSprite.anchor.set(0.5);
+            dotPool[i] = dotSprite;
+          }
+          const dotData = dotsData[i];
+          const localTime = elapsed - dotData.delay;
+          if (localTime < 0) {
+            if (dotSprite.parent) window.dots.removeChild(dotSprite);
+            continue;
+          }
+          const progress = Math.min(1, localTime / (duration - dotData.delay));
+          const alpha = progress;
+          const currentX = dotData.startX + progress * (dotData.endX - dotData.startX);
+          const currentY = dotData.startY + progress * (dotData.endY - dotData.startY);
+          if (!dotSprite.parent) {
+            window.dots.addChild(dotSprite);
+          }
+          const dotOuterRadiusMultiplier = 2;
+          const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
+          const baseRadius = window.baseRadius || 6;
+          const scale = outerRadius / baseRadius;
+          dotSprite.tint = 0xffffff;
+          dotSprite.x = currentX;
+          dotSprite.y = currentY;
+          dotSprite.alpha = alpha;
+          dotSprite.scale.set(scale);
+        }
+        if (elapsed < duration) {
+          requestAnimationFrame(animateDots);
+        } else {
+          cleanupDots();
+        }
+      };
+      animateDots();
+    }
+  }
+}
 
 /* =======================================================================
-   Styled Components & Layout
-   -----------------------------------------------------------------------
-   Note: AnimatedBubbleContainer now receives an "animation" prop.
-   If provided and the component is animating, it applies the CSS
-   generated by the animation object.
+   Registry & Installation
    ======================================================================= */
-const ScrollerContainer = styled.div`
+const InstalledAnimations = {};
+function installAnimation(animationInstance) {
+  InstalledAnimations[animationInstance.name] = animationInstance;
+}
+installAnimation(new FadeAnimation());
+installAnimation(new FloatAnimation());
+installAnimation(new FlickerAnimation());
+installAnimation(new DropAnimation());
+installAnimation(new ZipUpAnimation());
+installAnimation(new ZipDownAnimation());
+installAnimation(new ZipRightAnimation());
+installAnimation(new ZipLeftAnimation());
+installAnimation(new MaterializeAnimation());
+
+/* =======================================================================
+   Styled Components & Layout (Renamed from "ChatBubble" to "Event")
+   ======================================================================= */
+
+// Base component for events.
+const EventBase = styled.div`
+  /* Common base styles for events */
+`;
+
+// Glass-like container with a fixed white gradient and backdrop blur.
+const EventPanelScrollContainer = styled.div`
   width: 100%;
   height: 100%;
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: rgba(0, 0, 0, 0.4);
+  background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.6),
+      rgba(255, 255, 255, 0.2)
+    );
   border-radius: 10px;
   padding: 0;
   margin: 0;
+  backdrop-filter: blur(2px);
 `;
 
-const ScrollableContent = styled.div`
+const EventPanelContent = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column-reverse;
@@ -249,18 +403,20 @@ const ScrollableContent = styled.div`
   &::-webkit-scrollbar {
     display: none;
   }
+  position: relative;
 `;
 
-const ChatBubbleBase = React.forwardRef((props, ref) => (
-  <div ref={ref} {...props} />
-));
 
-export const ChatMessageEvent = styled(ChatBubbleBase)`
-  border: 2px solid limegreen;
+/* 
+   The actual events themselves. 
+   Increase the background color from ~0.4 to ~0.8 or 0.9
+*/
+export const MessageEvent = styled(EventBase)`
+  border: ${DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px;
   padding: 10px;
   color: #000;
-  background-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.8);
   max-width: 70%;
   align-self: flex-start;
   border-radius: 8px;
@@ -275,35 +431,35 @@ export const ChatMessageEvent = styled(ChatBubbleBase)`
   }
 `;
 
-export const InfoEvent = styled(ChatBubbleBase)`
-  border: 2px solid limegreen;
+export const InfoEvent = styled(EventBase)`
+  border: ${DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px auto;
   padding: 10px;
   text-align: center;
   color: #aaa;
   font-size: 0.9em;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: rgba(0, 0, 0, 0.8);
   border-radius: 4px;
   width: fit-content;
 `;
 
-export const ActionEvent = styled(ChatBubbleBase)`
-  border: 2px solid limegreen;
+export const ActionEvent = styled(EventBase)`
+  border: ${DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px auto;
   padding: 10px;
   text-align: center;
   color: #ddd;
   font-size: 0.9em;
-  background-color: rgba(123, 0, 255, 0.4);
+  background-color: rgba(123, 0, 255, 0.8);
   border-radius: 4px;
   width: fit-content;
 `;
 
-export const ErrorEvent = styled(ChatBubbleBase)`
-  border: 2px solid limegreen;
+export const ErrorEvent = styled(EventBase)`
+  border: ${DEBUG ? "2px solid limegreen" : "none"};
   margin: 10px;
   padding: 10px;
-  background-color: rgba(255, 0, 0, 0.6);
+  background-color: rgba(255, 0, 0, 0.8);
   border-radius: 8px;
   box-shadow: 0 0 10px red;
   max-width: 70%;
@@ -320,193 +476,16 @@ export const ErrorEvent = styled(ChatBubbleBase)`
   }
 `;
 
-// AnimatedBubbleContainer now applies the CSS from the animation prop.
-const AnimatedBubbleContainer = styled.div`
+// Container that applies the animation CSS.
+const AnimatedEventContainer = styled.div`
   position: relative;
   z-index: 3;
   opacity: ${(props) => (props.isAnimated ? 1 : props.initialOpacity)};
   transform: ${(props) => (props.isAnimated ? "none" : props.initialTransform)};
-  transition: opacity ${FADE_DURATION}s ease-out, transform ${FADE_DURATION}s ease-out;
-  ${(props) => props.animation && props.isAnimated ? props.animation.getCSS() : ""}
+  transition: opacity 2s ease-out, transform 2s ease-out;
+  ${(props) =>
+    props.animation && props.isAnimated ? props.animation.getCSS() : ""}
 `;
-
-/* =======================================================================
-   EventAnimationPlaceholder Component
-   -----------------------------------------------------------------------
-   Wraps each event bubble to manage its animation state.
-   Uses the installed AnimationType for initial styles and animation CSS.
-   The "materialize" type is handled separately.
-   ======================================================================= */
-const EventAnimationPlaceholder = ({
-  isNew,
-  creationAnimation,
-  children,
-  onAnimationComplete,
-}) => {
-  const [height, setHeight] = useState(isNew ? 0 : 80);
-  const [isAnimated, setIsAnimated] = useState(false);
-  const [pixiActive, setPixiActive] = useState(false);
-  const bubbleRef = useRef(null);
-  const childWithRef = React.cloneElement(React.Children.only(children), { ref: bubbleRef });
-
-  // Look up the animation from the registry.
-  const animation = InstalledAnimations[creationAnimation] || null;
-  // Use the animation's initial style if available.
-  const initialStyle = isNew && animation
-    ? animation.initialStyle
-    : { opacity: 1, transform: "none" };
-
-  // Start the animation (or materialize effect) and call onAnimationComplete when done.
-  const startAnimation = useCallback(() => {
-    setHeight(80);
-    if (creationAnimation === "materialize") {
-      setPixiActive(true);
-    }
-    setIsAnimated(true);
-    const effectTime = creationAnimation === "materialize" ? MATERIALIZE_DURATION * 1000 : 800;
-    const timer = setTimeout(() => {
-      if (onAnimationComplete) onAnimationComplete();
-      setPixiActive(false);
-    }, effectTime);
-    return () => clearTimeout(timer);
-  }, [creationAnimation, onAnimationComplete]);
-
-  useEffect(() => {
-    if (isNew) {
-      startAnimation();
-    }
-  }, [isNew, startAnimation]);
-
-  // MaterializeEffect uses PIXI for a particle effect.
-  const MaterializeEffect = ({
-    duration = MATERIALIZE_DURATION * 1000,
-    dotColor = 0xffffff,
-    dotInnerRadius = 0.8,
-    dotOuterRadiusMultiplier = 2,
-  }) => {
-    const pixiApp = useRef(window.pixiApp);
-    const dots = useRef(window.dots);
-    const dotPool = useRef([]);
-    const cleanupDots = useCallback(() => {
-      if (dots.current) {
-        dots.current.removeChildren();
-      }
-      dotPool.current.forEach((sprite) => {
-        if (sprite && sprite.destroy) sprite.destroy();
-      });
-      dotPool.current = [];
-    }, []);
-    useEffect(() => {
-      let animationFrameId;
-      if (bubbleRef.current && pixiApp.current && dots.current && pixiActive) {
-        const totalDots = 800;
-        const maxDelay = duration * 0.3;
-        const dotsData = [];
-        const screenWidth = pixiApp.current.renderer.width;
-        const screenHeight = pixiApp.current.renderer.height;
-        const circleRadius = Math.max(screenWidth, screenHeight) * 0.9;
-        for (let i = 0; i < totalDots; i++) {
-          const angle = Math.random() * 2 * Math.PI;
-          const r = Math.sqrt(Math.random()) * circleRadius;
-          const startX = screenWidth / 2 + r * Math.cos(angle);
-          const startY = screenHeight / 2 + r * Math.sin(angle);
-          const delay = Math.random() * maxDelay;
-          const innerR = dotInnerRadius + Math.random() * 0.3;
-          const rect = bubbleRef.current.getBoundingClientRect();
-          const scrollX = window.scrollX || window.pageXOffset;
-          const scrollY = window.scrollY || window.pageYOffset;
-          const targetDomX = rect.left + Math.random() * rect.width + scrollX;
-          const targetDomY = rect.top + Math.random() * rect.height + scrollY;
-          const targetPoint = new PIXI.Point();
-          pixiApp.current.renderer.plugins.interaction.mapPositionToPoint(
-            targetPoint,
-            targetDomX,
-            targetDomY
-          );
-          const { x: endX, y: endY } = targetPoint;
-          dotsData.push({ startX, startY, endX, endY, delay, innerR });
-        }
-        const startTime = performance.now();
-        const animateDots = () => {
-          const elapsed = performance.now() - startTime;
-          for (let i = 0; i < totalDots; i++) {
-            let dotSprite = dotPool.current[i];
-            if (!dotSprite) {
-              dotSprite = new PIXI.Sprite(window.circleTexture);
-              dotSprite.anchor.set(0.5);
-              dotPool.current[i] = dotSprite;
-            }
-            const dotData = dotsData[i];
-            const localTime = elapsed - dotData.delay;
-            if (localTime < 0) {
-              if (dotSprite.parent) dots.current.removeChild(dotSprite);
-              continue;
-            }
-            const progress = Math.min(1, localTime / (duration - dotData.delay));
-            const alpha = progress;
-            const currentX = dotData.startX + progress * (dotData.endX - dotData.startX);
-            const currentY = dotData.startY + progress * (dotData.endY - dotData.startY);
-            if (!dotSprite.parent) {
-              dots.current.addChild(dotSprite);
-            }
-            const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
-            const baseRadius = window.baseRadius || 6;
-            const scale = outerRadius / baseRadius;
-            dotSprite.tint = dotColor;
-            dotSprite.x = currentX;
-            dotSprite.y = currentY;
-            dotSprite.alpha = alpha;
-            dotSprite.scale.set(scale);
-          }
-          if (elapsed < duration) {
-            animationFrameId = requestAnimationFrame(animateDots);
-          } else {
-            cleanupDots();
-          }
-        };
-        animateDots();
-        return () => {
-          cancelAnimationFrame(animationFrameId);
-          cleanupDots();
-        };
-      }
-    }, [duration, pixiActive, dotColor, dotInnerRadius, dotOuterRadiusMultiplier, cleanupDots]);
-    return null;
-  };
-
-  return (
-    <div style={{ position: "relative", height, transition: "height 0.5s ease-out" }}>
-      <AnimatedBubbleContainer
-        isAnimated={isAnimated}
-        animation={animation} // Pass the installed animation (if any)
-        initialOpacity={initialStyle.opacity}
-        initialTransform={initialStyle.transform}
-      >
-        {childWithRef}
-      </AnimatedBubbleContainer>
-      {creationAnimation === "materialize" && pixiActive && <MaterializeEffect />}
-    </div>
-  );
-};
-
-const EventPane = ({ children }) => {
-  const scrollableContentRef = useRef(null);
-  const scrollToBottom = useCallback(() => {
-    if (scrollableContentRef.current) {
-      scrollableContentRef.current.scrollTop = 0;
-    }
-  }, []);
-  useEffect(() => {
-    scrollToBottom();
-  }, [children, scrollToBottom]);
-  return (
-    <ScrollerContainer>
-      <ScrollableContent ref={scrollableContentRef}>
-        {children}
-      </ScrollableContent>
-    </ScrollerContainer>
-  );
-};
 
 const Background = styled.div`
   position: fixed;
@@ -560,14 +539,90 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
-// EventComponent renders an event based on its type.
+/* =======================================================================
+   EventAnimationPlaceholder Component
+   -----------------------------------------------------------------------
+   Wraps an event to manage its animation state. Looks up the chosen animation
+   and applies its CSS animation and optional side effect.
+   ======================================================================= */
+const EventAnimationPlaceholder = ({
+  isNew,
+  creationAnimation,
+  children,
+  onAnimationComplete,
+}) => {
+  const [height, setHeight] = useState(isNew ? 0 : 80);
+  const [isAnimated, setIsAnimated] = useState(false);
+  const eventRef = useRef(null);
+  const childWithRef = React.cloneElement(React.Children.only(children), {
+    ref: eventRef,
+  });
+
+  const animation = InstalledAnimations[creationAnimation] || null;
+  const initialStyle =
+    isNew && animation
+      ? animation.initialStyle
+      : { opacity: 1, transform: "none" };
+
+  const startAnimation = useCallback(() => {
+    setHeight(80);
+    setIsAnimated(true);
+    if (animation && typeof animation.runEffect === "function") {
+      animation.runEffect(eventRef.current);
+    }
+    const effectTime =
+      creationAnimation === "materialize"
+        ? MATERIALIZE_DURATION * 1000
+        : 800;
+    const timer = setTimeout(() => {
+      if (onAnimationComplete) onAnimationComplete();
+    }, effectTime);
+    return () => clearTimeout(timer);
+  }, [creationAnimation, onAnimationComplete, animation]);
+
+  useEffect(() => {
+    if (isNew) {
+      startAnimation();
+    }
+  }, [isNew, startAnimation]);
+
+  return (
+    <div style={{ position: "relative", height, transition: "height 0.5s ease-out" }}>
+      <AnimatedEventContainer
+        isAnimated={isAnimated}
+        animation={animation}
+        initialOpacity={initialStyle.opacity}
+        initialTransform={initialStyle.transform}
+      >
+        {childWithRef}
+      </AnimatedEventContainer>
+    </div>
+  );
+};
+
+function EventPane({ children }) {
+  const scrollableContentRef = useRef(null);
+
+  return (
+    <EventPanelScrollContainer>
+      <EventPanelContent ref={scrollableContentRef}>
+        {children}
+        {/* Add the scroll affordances on top of the content */}
+      </EventPanelContent>
+    </EventPanelScrollContainer>
+  );
+}
+
+/* =======================================================================
+   EventComponent: Renders an event based on its type.
+   ======================================================================= */
 const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
   switch (event.type) {
     case "chatMessageEvent":
       return (
-        <ChatMessageEvent ref={ref} dateTime={dateTime}>
+        <MessageEvent ref={ref} dateTime={dateTime}>
           {event.text}
-        </ChatMessageEvent>
+        </MessageEvent>
       );
     case "infoEvent":
       return <InfoEvent ref={ref}>{event.text}</InfoEvent>;
@@ -584,7 +639,9 @@ const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
   }
 });
 
-// Helper to create a random event for demo purposes.
+/* =======================================================================
+   Helper: Create a Random Event
+   ======================================================================= */
 function createRandomEvent(id, type, creationAnimation) {
   const now = new Date();
   const newEvent = {
@@ -616,9 +673,8 @@ function createRandomEvent(id, type, creationAnimation) {
 /* =======================================================================
    DemoPage Component
    -----------------------------------------------------------------------
-   This is the main page component. It initializes the PIXI app,
-   renders the event pane, and uses the installed animation types.
-   Robust error handling is provided for PIXI initialization and cleanup.
+   Main page component initializes PIXI, renders the event pane,
+   and uses the installed animation types.
    ======================================================================= */
 export default function DemoPage() {
   const [events, setEvents] = useState(() => {
@@ -628,11 +684,9 @@ export default function DemoPage() {
       const type = ["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"][
         Math.floor(Math.random() * 4)
       ];
-      // Randomly pick one of the installed animation types (excluding "materialize")
       const animationKeys = Object.keys(InstalledAnimations);
-      const creationAnimation = animationKeys[
-        Math.floor(Math.random() * animationKeys.length)
-      ];
+      const creationAnimation =
+        animationKeys[Math.floor(Math.random() * animationKeys.length)];
       const event = {
         id: i + 1,
         date: new Date(now.getTime() - i * 60000),
@@ -658,7 +712,6 @@ export default function DemoPage() {
   const [selectedType, setSelectedType] = useState("chatMessageEvent");
   const [selectedCreationAnimation, setSelectedCreationAnimation] = useState("zipUp");
 
-  // Add a new event and log the action.
   const addRandomEvent = useCallback(() => {
     const newEvent = createRandomEvent(
       nextIdRef.current++,
@@ -669,7 +722,6 @@ export default function DemoPage() {
     slog("DemoPage", `Added new event (id: ${newEvent.id}) of type ${newEvent.type}.`);
   }, [selectedType, selectedCreationAnimation]);
 
-  // Mark an event as finalized (i.e. animation complete).
   const markEventAsFinal = useCallback((id) => {
     setEvents((prev) =>
       prev.map((evt) => (evt.id === id ? { ...evt, isNew: false } : evt))
@@ -694,7 +746,7 @@ export default function DemoPage() {
     [markEventAsFinal]
   );
 
-  // PIXI initialization and cleanup with robust error handling.
+  // Initialize PIXI with robust error handling.
   useEffect(() => {
     try {
       if (!window.pixiApp) {
@@ -756,41 +808,50 @@ export default function DemoPage() {
   }, []);
 
   return (
-    <StyleSheetManager
-      shouldForwardProp={(prop) =>
-        !["isAnimated", "creationAnimation", "initialOpacity", "initialTransform", "animation"].includes(prop)
-      }
-    >
-      <>
-        <Background />
-        <PixiContainer id="pixi-container" />
-        <ButtonBar style={{ flexDirection: "column" }}>
-          <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
-            <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-              {["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"].map((typeItem) => (
+    <>
+      <Background />
+      <PixiContainer id="pixi-container" />
+      <ButtonBar
+        css={css`
+          flex-direction: column;
+        `}
+      >
+        <div
+          css={css`
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            margin-bottom: 10px;
+          `}
+        >
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+          >
+            {["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"].map(
+              (typeItem) => (
                 <option key={typeItem} value={typeItem}>
                   {typeItem}
                 </option>
-              ))}
-            </select>
-            <select
-              value={selectedCreationAnimation}
-              onChange={(e) => setSelectedCreationAnimation(e.target.value)}
-            >
-              {Object.keys(InstalledAnimations).map((animKey) => (
-                <option key={animKey} value={animKey}>
-                  {animKey}
-                </option>
-              ))}
-              {/* Optionally add "materialize" here if needed */}
-            </select>
-          </div>
-          <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
-        </ButtonBar>
-        <PageContainer>
-          <EventPane>{events.map(renderEvent)}</EventPane>
-        </PageContainer>
-      </>
-    </StyleSheetManager>
+              )
+            )}
+          </select>
+          <select
+            value={selectedCreationAnimation}
+            onChange={(e) => setSelectedCreationAnimation(e.target.value)}
+          >
+            {Object.keys(InstalledAnimations).map((animKey) => (
+              <option key={animKey} value={animKey}>
+                {animKey}
+              </option>
+            ))}
+          </select>
+        </div>
+        <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
+      </ButtonBar>
+      <PageContainer>
+        <EventPane>{events.map(renderEvent)}</EventPane>
+      </PageContainer>
+    </>
   );
 }
