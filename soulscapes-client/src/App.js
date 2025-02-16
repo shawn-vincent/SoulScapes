@@ -40,8 +40,8 @@ function App() {
 		    onClose={() => setGlobalError(null)}
 		/>
 	    )}
-	    {/* <Room/> */}
-	    <DemoPage />
+	    <Room/>
+	    {/*<DemoPage />*/}
 
 	</>
     );
