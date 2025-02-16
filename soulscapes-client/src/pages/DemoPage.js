@@ -14,7 +14,7 @@ import {
   EventAnimationPlaceholder, 
   EventComponent, 
   createRandomEvent 
-} from "../components/EventPanel";
+} from "../components/EventPane";
 import { InstalledAnimations } from "../components/AnimationManager";
 
 // -----------------------------------------------------------------------

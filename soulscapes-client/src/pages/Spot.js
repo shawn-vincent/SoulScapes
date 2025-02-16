@@ -1,20 +1,19 @@
-// src/pages/Spot.js
 import React, { useState, useRef, useEffect } from 'react';
 import styled from '@emotion/styled';
 import { List, ChatTeardropText, Users } from '@phosphor-icons/react';
 import DividedLayout from '../components/DividedLayout';
-import MessageList from '../components/MessageList';
+import { EventPane } from '../components/EventPane';
 import Avatar from '../components/Avatar';
 import ScrollLayout from '../components/ScrollLayout';
 import AvatarClusterLayout from '../components/AvatarClusterLayout';
 import AvatarHorizontalGridLayout from '../components/AvatarHorizontalGridLayout';
+import CommandLine from '../components/CommandLine';
 
 import spotManager from "../services/SpotManager";
 import localAvatarManager from "../services/LocalAvatarManager";
 import remoteAvatarManager from "../services/RemoteAvatarManager";
 
 // Styled Components using Emotion
-
 const SpotContainer = styled.div`
   width: 100vw;
   height: 100vh;
@@ -58,7 +57,7 @@ const TitleText = styled.span`
 const MainContent = styled.div`
   position: absolute;
   top: 30px;
-  bottom: 40px; /* matches the input bar's height */
+  bottom: 40px; /* matches the command line's height */
   left: 0;
   right: 0;
   overflow: hidden;
@@ -85,40 +84,12 @@ const AvatarGridContainer = styled.div`
   box-sizing: border-box;
 `;
 
-const InputContainer = styled.div`
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 40px;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  box-sizing: border-box;
-  z-index: 3;
-`;
-
-const TextInput = styled.input`
-  width: 100%;
-  background-color: rgba(255, 255, 255, 0.6);
-  color: black;
-  height: calc(100% - 8px);
-  margin: 4px;
-  border: none;
-  padding: 4px;
-  font-size: 16px;
-  outline: none;
-  border-radius: 20px;
-  box-sizing: border-box;
-`;
-
 const SideMenu = styled.div`
   position: absolute;
   top: 30px;
   left: 0;
   width: 250px;
-  height: calc(100vh - 70px); /* 30px for title bar, 40px for input bar */
+  height: calc(100vh - 70px); /* 30px for title bar, 40px for command line */
   background-color: rgba(0, 0, 0, 0.8);
   transform: translateX(${(props) => (props.open ? '0' : '-100%')});
   transition: transform 0.3s ease;
@@ -183,9 +154,9 @@ const Spot = () => {
 
   // Render the message area (left pane).
   const renderMessageArea = () => (
-    <MessageArea>
-      <MessageList />
-    </MessageArea>
+    <EventPane>
+      {/* Message events go here */}
+    </EventPane>
   );
 
   // Render the avatar area (right pane), split horizontally:
@@ -250,14 +221,8 @@ const Spot = () => {
       {/* Main Content Area */}
       <MainContent>{renderDesktopContent()}</MainContent>
 
-      {/* Input Bar */}
-      <InputContainer>
-        <TextInput
-          id="commandLine"
-          type="text"
-          placeholder="Type a message..."
-        />
-      </InputContainer>
+      {/* Command Line */}
+      <CommandLine />
 
       {/* Side Menu */}
       <SideMenu open={menuOpen}>
