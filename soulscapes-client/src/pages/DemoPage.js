@@ -5,45 +5,55 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
-import styled, {
-  StyleSheetManager,
-  keyframes,
-  css,
-} from "styled-components";
+import styled, { StyleSheetManager, keyframes, css } from "styled-components";
 import { format } from "date-fns";
 import * as PIXI from "pixi.js";
 // Import the regular slogger logging functions.
-import { slog, serror, sdebug, swarn } from '../../../shared/slogger.js';
+import { slog, serror, sdebug, swarn } from "../../../shared/slogger.js";
 
-// ---------- DURATION CONSTANTS (in seconds) ----------
+/* =======================================================================
+   AnimationType Class & Registry
+   -----------------------------------------------------------------------
+   Each animation type is encapsulated in a single JavaScript object.
+   An instance of AnimationType contains:
+     - name: Unique identifier.
+     - keyframes: A styled-components keyframes definition.
+     - duration: Duration (in seconds).
+     - initialStyle: The style (opacity/transform) to apply initially.
+     - getCSS(): A method that returns the CSS for applying the animation.
+   New animations can be added simply by creating a new instance and
+   installing it into InstalledAnimations.
+   ======================================================================= */
+class AnimationType {
+  constructor({ name, keyframes, duration, initialStyle }) {
+    this.name = name;
+    this.keyframes = keyframes;
+    this.duration = duration;
+    this.initialStyle = initialStyle;
+  }
+  getCSS() {
+    // Returns CSS for applying the keyframes animation.
+    return css`
+      animation: ${this.keyframes} ${this.duration}s ease-out forwards;
+    `;
+  }
+}
+
+// Duration constants
 const FADE_DURATION = 2.0;
 const FLOAT_DURATION = 2.0;
-const DROP_DURATION = 0.8;       // Drop animation duration
-const ZIP_DURATION = 0.4;        // Zip animations duration
+const DROP_DURATION = 0.5;
+const ZIP_DURATION = 0.4;
 const FLICKER_DURATION = 1.5;
 const MATERIALIZE_DURATION = FADE_DURATION * 0.33;
 
-// ---------- Configuration ----------
-const EVENT_TYPES = ["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"];
-const EVENT_CREATION_ANIMATIONS = [
-  "fade",
-  "drop",
-  "zipUp",
-  "zipDown",
-  "zipRight",
-  "zipLeft",
-  "float",
-  "flicker",
-  "materialize",
-];
-
-// ---------- Keyframe Animations ----------
-const fadeAnimation = keyframes`
+// Define keyframes
+const fadeKeyframes = keyframes`
   from { opacity: 0; }
   to { opacity: 1; }
 `;
 
-const floatFall = keyframes`
+const floatKeyframes = keyframes`
   0% {
     transform: translateY(-100vh) translateX(20vw) rotate(-10deg);
     opacity: 0;
@@ -62,7 +72,7 @@ const floatFall = keyframes`
   }
 `;
 
-const flicker = keyframes`
+const flickerKeyframes = keyframes`
   0% { opacity: 0; }
   10% { opacity: 1; }
   20% { opacity: 0; }
@@ -76,7 +86,7 @@ const flicker = keyframes`
   100% { opacity: 1; }
 `;
 
-const dropAnimation = keyframes`
+const dropKeyframes = keyframes`
   0% {
     transform: translateY(-120vh) rotate(0deg);
   }
@@ -91,7 +101,7 @@ const dropAnimation = keyframes`
   }
 `;
 
-const zipUp = keyframes`
+const zipUpKeyframes = keyframes`
   0% {
     transform: translateY(100vh);
     opacity: 0;
@@ -106,7 +116,7 @@ const zipUp = keyframes`
   }
 `;
 
-const zipDown = keyframes`
+const zipDownKeyframes = keyframes`
   0% {
     transform: translateY(-100vh);
     opacity: 0;
@@ -121,7 +131,7 @@ const zipDown = keyframes`
   }
 `;
 
-const zipRight = keyframes`
+const zipRightKeyframes = keyframes`
   0% {
     transform: translateX(-100vw);
     opacity: 0;
@@ -136,7 +146,7 @@ const zipRight = keyframes`
   }
 `;
 
-const zipLeft = keyframes`
+const zipLeftKeyframes = keyframes`
   0% {
     transform: translateX(100vw);
     opacity: 0;
@@ -151,7 +161,68 @@ const zipLeft = keyframes`
   }
 `;
 
-// ---------- Styled Components ----------
+// InstalledAnimations registry.
+// Each property is an instance of AnimationType.
+// The "materialize" effect is special and will be handled separately.
+const InstalledAnimations = {
+  fade: new AnimationType({
+    name: "fade",
+    keyframes: fadeKeyframes,
+    duration: FADE_DURATION,
+    initialStyle: { opacity: 0, transform: "none" },
+  }),
+  float: new AnimationType({
+    name: "float",
+    keyframes: floatKeyframes,
+    duration: FLOAT_DURATION,
+    initialStyle: { opacity: 0, transform: "translateY(-100vh) translateX(10vw) rotate(10deg)" },
+  }),
+  flicker: new AnimationType({
+    name: "flicker",
+    keyframes: flickerKeyframes,
+    duration: FLICKER_DURATION,
+    initialStyle: { opacity: 0.2, transform: "none" },
+  }),
+  drop: new AnimationType({
+    name: "drop",
+    keyframes: dropKeyframes,
+    duration: DROP_DURATION,
+    initialStyle: { opacity: 1, transform: "translateY(-120vh)" },
+  }),
+  zipUp: new AnimationType({
+    name: "zipUp",
+    keyframes: zipUpKeyframes,
+    duration: ZIP_DURATION,
+    initialStyle: { opacity: 0, transform: "translateY(100vh)" },
+  }),
+  zipDown: new AnimationType({
+    name: "zipDown",
+    keyframes: zipDownKeyframes,
+    duration: ZIP_DURATION,
+    initialStyle: { opacity: 0, transform: "translateY(-100vh)" },
+  }),
+  zipRight: new AnimationType({
+    name: "zipRight",
+    keyframes: zipRightKeyframes,
+    duration: ZIP_DURATION,
+    initialStyle: { opacity: 0, transform: "translateX(-100vw)" },
+  }),
+  zipLeft: new AnimationType({
+    name: "zipLeft",
+    keyframes: zipLeftKeyframes,
+    duration: ZIP_DURATION,
+    initialStyle: { opacity: 0, transform: "translateX(100vw)" },
+  }),
+  // "materialize" will be handled separately.
+};
+
+/* =======================================================================
+   Styled Components & Layout
+   -----------------------------------------------------------------------
+   Note: AnimatedBubbleContainer now receives an "animation" prop.
+   If provided and the component is animating, it applies the CSS
+   generated by the animation object.
+   ======================================================================= */
 const ScrollerContainer = styled.div`
   width: 100%;
   height: 100%;
@@ -249,55 +320,23 @@ export const ErrorEvent = styled(ChatBubbleBase)`
   }
 `;
 
+// AnimatedBubbleContainer now applies the CSS from the animation prop.
 const AnimatedBubbleContainer = styled.div`
   position: relative;
   z-index: 3;
   opacity: ${(props) => (props.isAnimated ? 1 : props.initialOpacity)};
   transform: ${(props) => (props.isAnimated ? "none" : props.initialTransform)};
-  transition: opacity ${FADE_DURATION}s ease-out,
-    transform ${FADE_DURATION}s ease-out;
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "float" && css`
-      animation: ${floatFall} ${FLOAT_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "flicker" && css`
-      animation: ${flicker} ${FLICKER_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "drop" && css`
-      animation: ${dropAnimation} ${DROP_DURATION}s cubic-bezier(0.4, 0, 1, 1) forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "zipUp" && css`
-      animation: ${zipUp} ${ZIP_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "zipDown" && css`
-      animation: ${zipDown} ${ZIP_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "zipRight" && css`
-      animation: ${zipRight} ${ZIP_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "zipLeft" && css`
-      animation: ${zipLeft} ${ZIP_DURATION}s ease-out forwards;
-    `}
-
-  ${(props) =>
-    props.isAnimated && props.creationAnimation === "fade" && css`
-      animation: ${fadeAnimation} ${FADE_DURATION}s ease-out forwards;
-    `}
+  transition: opacity ${FADE_DURATION}s ease-out, transform ${FADE_DURATION}s ease-out;
+  ${(props) => props.animation && props.isAnimated ? props.animation.getCSS() : ""}
 `;
 
+/* =======================================================================
+   EventAnimationPlaceholder Component
+   -----------------------------------------------------------------------
+   Wraps each event bubble to manage its animation state.
+   Uses the installed AnimationType for initial styles and animation CSS.
+   The "materialize" type is handled separately.
+   ======================================================================= */
 const EventAnimationPlaceholder = ({
   isNew,
   creationAnimation,
@@ -308,36 +347,16 @@ const EventAnimationPlaceholder = ({
   const [isAnimated, setIsAnimated] = useState(false);
   const [pixiActive, setPixiActive] = useState(false);
   const bubbleRef = useRef(null);
-  const singleChild = React.Children.only(children);
-  const childWithRef = React.cloneElement(singleChild, { ref: bubbleRef });
+  const childWithRef = React.cloneElement(React.Children.only(children), { ref: bubbleRef });
 
-  const initialStyle = useMemo(() => {
-    const getInitialInnerStyle = (anim) => {
-      switch (anim) {
-        case "drop":
-          return { opacity: 1, transform: "translateY(-120vh)" };
-        case "float":
-          return { opacity: 0, transform: "translateY(-100vh) translateX(10vw) rotate(10deg)" };
-        case "zipUp":
-          return { opacity: 0, transform: "translateY(100vh)" };
-        case "zipDown":
-          return { opacity: 0, transform: "translateY(-100vh)" };
-        case "zipRight":
-          return { opacity: 0, transform: "translateX(-100vw)" };
-        case "zipLeft":
-          return { opacity: 0, transform: "translateX(100vw)" };
-        case "flicker":
-          return { opacity: 0.2, transform: "none" };
-        case "materialize":
-          return { opacity: 0, transform: "none" };
-        case "fade":
-        default:
-          return { opacity: 0, transform: "none" };
-      }
-    };
-    return isNew ? getInitialInnerStyle(creationAnimation) : { opacity: 1, transform: "none" };
-  }, [isNew, creationAnimation]);
+  // Look up the animation from the registry.
+  const animation = InstalledAnimations[creationAnimation] || null;
+  // Use the animation's initial style if available.
+  const initialStyle = isNew && animation
+    ? animation.initialStyle
+    : { opacity: 1, transform: "none" };
 
+  // Start the animation (or materialize effect) and call onAnimationComplete when done.
   const startAnimation = useCallback(() => {
     setHeight(80);
     if (creationAnimation === "materialize") {
@@ -354,10 +373,11 @@ const EventAnimationPlaceholder = ({
 
   useEffect(() => {
     if (isNew) {
-      return startAnimation();
+      startAnimation();
     }
   }, [isNew, startAnimation]);
 
+  // MaterializeEffect uses PIXI for a particle effect.
   const MaterializeEffect = ({
     duration = MATERIALIZE_DURATION * 1000,
     dotColor = 0xffffff,
@@ -424,7 +444,6 @@ const EventAnimationPlaceholder = ({
             }
             const progress = Math.min(1, localTime / (duration - dotData.delay));
             const alpha = progress;
-            const scaleFactor = 1;
             const currentX = dotData.startX + progress * (dotData.endX - dotData.startX);
             const currentY = dotData.startY + progress * (dotData.endY - dotData.startY);
             if (!dotSprite.parent) {
@@ -432,7 +451,7 @@ const EventAnimationPlaceholder = ({
             }
             const outerRadius = dotData.innerR * dotOuterRadiusMultiplier;
             const baseRadius = window.baseRadius || 6;
-            const scale = (outerRadius / baseRadius) * scaleFactor;
+            const scale = outerRadius / baseRadius;
             dotSprite.tint = dotColor;
             dotSprite.x = currentX;
             dotSprite.y = currentY;
@@ -459,7 +478,7 @@ const EventAnimationPlaceholder = ({
     <div style={{ position: "relative", height, transition: "height 0.5s ease-out" }}>
       <AnimatedBubbleContainer
         isAnimated={isAnimated}
-        creationAnimation={creationAnimation}
+        animation={animation} // Pass the installed animation (if any)
         initialOpacity={initialStyle.opacity}
         initialTransform={initialStyle.transform}
       >
@@ -541,6 +560,7 @@ const PixiContainer = styled.div`
   z-index: 2;
 `;
 
+// EventComponent renders an event based on its type.
 const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
   switch (event.type) {
     case "chatMessageEvent":
@@ -564,6 +584,7 @@ const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
   }
 });
 
+// Helper to create a random event for demo purposes.
 function createRandomEvent(id, type, creationAnimation) {
   const now = new Date();
   const newEvent = {
@@ -592,14 +613,25 @@ function createRandomEvent(id, type, creationAnimation) {
   return newEvent;
 }
 
+/* =======================================================================
+   DemoPage Component
+   -----------------------------------------------------------------------
+   This is the main page component. It initializes the PIXI app,
+   renders the event pane, and uses the installed animation types.
+   Robust error handling is provided for PIXI initialization and cleanup.
+   ======================================================================= */
 export default function DemoPage() {
   const [events, setEvents] = useState(() => {
     const now = new Date();
     const initialEvents = [];
     for (let i = 0; i < 5; i++) {
-      const type = EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
-      const creationAnimation = EVENT_CREATION_ANIMATIONS[
-        Math.floor(Math.random() * EVENT_CREATION_ANIMATIONS.length)
+      const type = ["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"][
+        Math.floor(Math.random() * 4)
+      ];
+      // Randomly pick one of the installed animation types (excluding "materialize")
+      const animationKeys = Object.keys(InstalledAnimations);
+      const creationAnimation = animationKeys[
+        Math.floor(Math.random() * animationKeys.length)
       ];
       const event = {
         id: i + 1,
@@ -626,6 +658,7 @@ export default function DemoPage() {
   const [selectedType, setSelectedType] = useState("chatMessageEvent");
   const [selectedCreationAnimation, setSelectedCreationAnimation] = useState("zipUp");
 
+  // Add a new event and log the action.
   const addRandomEvent = useCallback(() => {
     const newEvent = createRandomEvent(
       nextIdRef.current++,
@@ -636,6 +669,7 @@ export default function DemoPage() {
     slog("DemoPage", `Added new event (id: ${newEvent.id}) of type ${newEvent.type}.`);
   }, [selectedType, selectedCreationAnimation]);
 
+  // Mark an event as finalized (i.e. animation complete).
   const markEventAsFinal = useCallback((id) => {
     setEvents((prev) =>
       prev.map((evt) => (evt.id === id ? { ...evt, isNew: false } : evt))
@@ -660,6 +694,7 @@ export default function DemoPage() {
     [markEventAsFinal]
   );
 
+  // PIXI initialization and cleanup with robust error handling.
   useEffect(() => {
     try {
       if (!window.pixiApp) {
@@ -723,7 +758,7 @@ export default function DemoPage() {
   return (
     <StyleSheetManager
       shouldForwardProp={(prop) =>
-        !["isAnimated", "creationAnimation", "initialOpacity", "initialTransform"].includes(prop)
+        !["isAnimated", "creationAnimation", "initialOpacity", "initialTransform", "animation"].includes(prop)
       }
     >
       <>
@@ -732,7 +767,7 @@ export default function DemoPage() {
         <ButtonBar style={{ flexDirection: "column" }}>
           <div style={{ display: "flex", flexDirection: "row", gap: "10px", marginBottom: "10px" }}>
             <select value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
-              {EVENT_TYPES.map((typeItem) => (
+              {["chatMessageEvent", "infoEvent", "actionEvent", "errorEvent"].map((typeItem) => (
                 <option key={typeItem} value={typeItem}>
                   {typeItem}
                 </option>
@@ -742,11 +777,12 @@ export default function DemoPage() {
               value={selectedCreationAnimation}
               onChange={(e) => setSelectedCreationAnimation(e.target.value)}
             >
-              {EVENT_CREATION_ANIMATIONS.map((anim) => (
-                <option key={anim} value={anim}>
-                  {anim}
+              {Object.keys(InstalledAnimations).map((animKey) => (
+                <option key={animKey} value={animKey}>
+                  {animKey}
                 </option>
               ))}
+              {/* Optionally add "materialize" here if needed */}
             </select>
           </div>
           <StyledButton onClick={addRandomEvent}>Add Event</StyledButton>
