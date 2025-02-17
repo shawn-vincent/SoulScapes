@@ -133,7 +133,7 @@ class RoomManager {
 	    slog(`🎥 Adding local video tracks to call with ${peerId}`);
 	    localStream.getTracks().forEach((track) => peerConnection.addTrack(track, localStream));
 	} else {
-	    swarn(`⚠️ No local video stream found for ${peerId}`);
+	    serror(`No local video stream found for ${peerId}`);
 	}
 
 	peerConnection.onicecandidate = (event) => {

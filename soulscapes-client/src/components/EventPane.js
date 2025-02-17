@@ -1,36 +1,13 @@
 /** @jsxImportSource @emotion/react */
-import React, {
-    useState,
-    useRef,
-    useEffect,
-    useCallback,
-} from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import styled from "@emotion/styled";
-import { css, keyframes } from "@emotion/react";
+import { css } from "@emotion/react";
 import { format } from "date-fns";
 import { InstalledAnimations } from "./AnimationManager";
 import { useEvents, addEvent } from "../services/EventManager";
-// Import BaseCommand and CommandRegistry from CommandLine.
 import { BaseCommand, CommandRegistry } from "./CommandLine";
 import eventManager from "../services/EventManager";
-
-// -----------------------------------------------------------------------
-// Animation for Gradient Pulse
-// -----------------------------------------------------------------------
-const pulse = keyframes`
-    0% {
-        opacity: 0.8;
-        transform: translateY(0);
-    }
-    50% {
-        opacity: 0.3;
-        transform: translateY(3px);
-    }
-    100% {
-        opacity: 0.8;
-        transform: translateY(0);
-    }
-`;
+import { CaretUp, CaretDown } from "@phosphor-icons/react";
 
 // -----------------------------------------------------------------------
 // Styled Components for Events
@@ -120,6 +97,9 @@ const AnimatedEventContainer = styled.div`
 // -----------------------------------------------------------------------
 // Event Animation Placeholder
 // -----------------------------------------------------------------------
+
+
+
 export const EventAnimationPlaceholder = ({
     isNew,
     creationAnimation,
@@ -131,57 +111,59 @@ export const EventAnimationPlaceholder = ({
     const eventRef = useRef(null);
     // Clone the child element to attach a ref.
     const childWithRef = React.cloneElement(React.Children.only(children), {
-        ref: eventRef,
+	ref: eventRef,
     });
 
     const animation = InstalledAnimations[creationAnimation] || null;
     const initialStyle =
-        isNew && animation
-            ? animation.initialStyle
-            : { opacity: 1, transform: "none" };
+	  isNew && animation
+	  ? animation.initialStyle
+	  : { opacity: 1, transform: "none" };
 
     // Use the animation's own duration (in milliseconds).
     const effectTime = animation ? animation.getEffectDuration() : 800;
 
     const startAnimation = useCallback(() => {
-        setIsAnimated(true);
-        if (animation && typeof animation.runEffect === "function") {
-            animation.runEffect(eventRef.current);
-        }
-        const timer = setTimeout(() => {
-            if (onAnimationComplete) onAnimationComplete();
-        }, effectTime);
-        return () => clearTimeout(timer);
+	setIsAnimated(true);
+	if (animation && typeof animation.runEffect === "function") {
+	    animation.runEffect(eventRef.current);
+	}
+	const timer = setTimeout(() => {
+	    setHeight(undefined);	  
+	    if (onAnimationComplete) onAnimationComplete();
+	}, effectTime);
+	return () => clearTimeout(timer);
     }, [effectTime, onAnimationComplete, animation]);
 
     // Wait to set the final height before the drop animation is enabled
     useEffect(() => {
-        if (isNew) {
-            const containerExpandTime = 500; // Adjust timing based on the animation duration (should be close to it)
-            setHeight(80);
-            const timer = setTimeout(() => {
-                startAnimation()
-            }, containerExpandTime)
-        }
+	if (isNew) {
+	    const containerExpandTime = 500; // Adjust timing based on the animation duration
+	    setHeight(80);
+	    const timer = setTimeout(() => {
+		startAnimation();
+	    }, containerExpandTime);
+	    return () => clearTimeout(timer);
+	}
     }, [isNew, startAnimation]);
 
     return (
-        <div
-            style={{
-                position: "relative",
-                height,
-                transition: "height 0.5s ease-out",
-            }}
-        >
-            <AnimatedEventContainer
-                isAnimated={isAnimated}
-                animation={animation}
-                initialOpacity={initialStyle.opacity}
-                initialTransform={initialStyle.transform}
-            >
-                {childWithRef}
-            </AnimatedEventContainer>
-        </div>
+	<div
+	    style={{
+		position: "relative",
+		height,
+		transition: "height 0.5s ease-out",
+	    }}
+	>
+	    <AnimatedEventContainer
+		isAnimated={isAnimated}
+		animation={animation}
+		initialOpacity={initialStyle.opacity}
+		initialTransform={initialStyle.transform}
+	    >
+		{childWithRef}
+	    </AnimatedEventContainer>
+	</div>
     );
 };
 
@@ -190,39 +172,37 @@ export const EventAnimationPlaceholder = ({
 // -----------------------------------------------------------------------
 export const EventComponent = React.forwardRef(({ event, dateTime }, ref) => {
     switch (event.type) {
-        case "chatMessageEvent":
-            return (
-                <MessageEvent ref={ref} dateTime={dateTime}>
-                    {event.text}
-                </MessageEvent>
-            );
-        case "infoEvent":
-            return <InfoEvent ref={ref}>{event.text}</InfoEvent>;
-        case "actionEvent":
-            return <ActionEvent ref={ref}>{event.text}</ActionEvent>;
-        case "errorEvent":
-            return (
-                <ErrorEvent ref={ref} dateTime={dateTime}>
-                    {event.text}
-                </ErrorEvent>
-            );
-        default:
-            return <div ref={ref}>Unknown event type</div>;
+    case "chatMessageEvent":
+	return (
+            <MessageEvent ref={ref} dateTime={dateTime}>
+		{event.text}
+            </MessageEvent>
+	);
+    case "infoEvent":
+	return <InfoEvent ref={ref}>{event.text}</InfoEvent>;
+    case "actionEvent":
+	return <ActionEvent ref={ref}>{event.text}</ActionEvent>;
+    case "errorEvent":
+	return (
+            <ErrorEvent ref={ref} dateTime={dateTime}>
+		{event.text}
+            </ErrorEvent>
+	);
+    default:
+	return <div ref={ref}>Unknown event type</div>;
     }
 });
 
 // -----------------------------------------------------------------------
 // Utility to mark an event as final (no longer new)
 // -----------------------------------------------------------------------
-// This is one way to update the event's state so that it doesn't animate again.
-// You may want to adjust this to fit your application's state management.
 const markEventAsFinal = (eventId) => {
     const events = eventManager.getSnapshot();
     const evt = events.find((e) => e.id === eventId);
     if (evt && evt.isNew) {
-        evt.isNew = false;
-        // Trigger a re-render by emitting a change.
-        eventManager.emitChange();
+	evt.isNew = false;
+	// Trigger a re-render by emitting a change.
+	eventManager.emitChange();
     }
 };
 
@@ -262,86 +242,87 @@ const EventPanelContent = styled.div`
   position: relative;
 `;
 
-const GradientOverlay = styled.div`
-    position: absolute;
-    left: 0;
-    width: 100%;
-    height: 50px; /* Adjust height as needed */
-    z-index: 2;
-    pointer-events: none;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0));
-    opacity: 0.8;
-    animation: ${pulse} 2s linear infinite;
+// New Scroll Indicator Components
+const ScrollIndicator = styled.div`
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: ${(props) => (props.show ? 1 : 0)};
+  transition: opacity 0.3s ease-in-out;
 `;
 
-const TopGradientOverlay = styled(GradientOverlay)`
-    top: 0;
-    /* initial opacity for the top gradient */
-    opacity: ${props => props.show ? 0.8 : 0};
-    transition: opacity 0.3s ease-in-out;  /* animate opacity */
+const TopScrollIndicator = styled(ScrollIndicator)`
+  top: 10px;
 `;
 
-const BottomGradientOverlay = styled(GradientOverlay)`
-    bottom: 0;
-    transform: rotate(180deg);
-    /* initial opacity for the bottom gradient */
-    opacity: ${props => props.show ? 0.8 : 0};
-    transition: opacity 0.3s ease-in-out; /* animate opacity */
+const BottomScrollIndicator = styled(ScrollIndicator)`
+  bottom: 10px;
 `;
 
 // -----------------------------------------------------------------------
-// EventPane Component
+// EventPane Component with Reimplemented Scroll Arrows
 // -----------------------------------------------------------------------
 export function EventPane() {
     const events = useEvents();
-    const [showTopGradient, setShowTopGradient] = useState(false);
-    const [showBottomGradient, setShowBottomGradient] = useState(false);
+    const [showTopIndicator, setShowTopIndicator] = useState(false);
+    const [showBottomIndicator, setShowBottomIndicator] = useState(false);
     const contentRef = useRef(null);
 
-    const updateGradients = useCallback(() => {
-        if (!contentRef.current) return;
-        const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
-        // 1px threshold to avoid flickering at the very top/bottom.
-        setShowTopGradient(scrollTop > 1);
-        setShowBottomGradient(scrollTop + clientHeight < scrollHeight - 1);
+    const updateIndicators = useCallback(() => {
+	if (!contentRef.current) return;
+	const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
+	// A small threshold to prevent flickering
+	setShowTopIndicator(scrollTop > 1);
+	setShowBottomIndicator(scrollTop + clientHeight < scrollHeight - 1);
     }, []);
 
     useEffect(() => {
-        updateGradients(); // Initial check
-
-        const current = contentRef.current;
-        if (current) {
-            current.addEventListener('scroll', updateGradients);
-            return () => {
-                current.removeEventListener('scroll', updateGradients);
-            };
-        }
-    }, [updateGradients]);
+	updateIndicators(); // initial check
+	const current = contentRef.current;
+	if (current) {
+	    current.addEventListener("scroll", updateIndicators);
+	    return () => {
+		current.removeEventListener("scroll", updateIndicators);
+	    };
+	}
+    }, [updateIndicators]);
 
     return (
-        <EventPanelScrollContainer>
-            <TopGradientOverlay show={showTopGradient}/>
-            <EventPanelContent ref={contentRef}>
-                {events.map((evt) => {
-                    const dateTimeStr = format(evt.date, "hh:mm:ss");
-                    return (
-                        <EventAnimationPlaceholder
-                            key={evt.id}
-                            isNew={evt.isNew}
-                            creationAnimation={evt.creationAnimation}
-                            onAnimationComplete={() => {
-                                if (evt.isNew) {
-                                    markEventAsFinal(evt.id);
-                                }
-                            }}
-                        >
-                            <EventComponent event={evt} dateTime={dateTimeStr} />
-                        </EventAnimationPlaceholder>
-                    );
-                })}
-            </EventPanelContent>
-            <BottomGradientOverlay show={showBottomGradient}/>
-        </EventPanelScrollContainer>
+	<EventPanelScrollContainer>
+	    <TopScrollIndicator show={showTopIndicator}>
+		<CaretUp size={24} weight="bold" color="#fff" />
+	    </TopScrollIndicator>
+	    <EventPanelContent ref={contentRef}>
+		{events.map((evt) => {
+		    const dateTimeStr = format(evt.date, "hh:mm:ss");
+		    return (
+			<EventAnimationPlaceholder
+			    key={evt.id}
+			    isNew={evt.isNew}
+			    creationAnimation={evt.creationAnimation}
+			    onAnimationComplete={() => {
+				if (evt.isNew) {
+				    markEventAsFinal(evt.id);
+				}
+			    }}
+			>
+			    <EventComponent event={evt} dateTime={dateTimeStr} />
+			</EventAnimationPlaceholder>
+		    );
+		})}
+	    </EventPanelContent>
+	    <BottomScrollIndicator show={showBottomIndicator}>
+		<CaretDown size={24} weight="bold" color="#fff" />
+	    </BottomScrollIndicator>
+	</EventPanelScrollContainer>
     );
 }
 
@@ -350,7 +331,7 @@ export function EventPane() {
 // -----------------------------------------------------------------------
 export class ChatCommand extends BaseCommand {
     constructor() {
-        super("chat");
+	super("chat");
     }
 
     /**
@@ -358,40 +339,49 @@ export class ChatCommand extends BaseCommand {
      * @param {string} fullText - The full text of the input.
      */
     execute(fullText) {
-        const newEvent = {
-            id: Date.now(),
-            date: new Date(),
-            isNew: true,
-            type: "chatMessageEvent",
-            text: fullText,
-            creationAnimation: "zipUp",
-        };
-        addEvent(newEvent);
+	const newEvent = {
+	    id: Date.now(),
+	    date: new Date(),
+	    isNew: true,
+	    type: "chatMessageEvent",
+	    text: fullText,
+	    creationAnimation: "zipUp",
+	};
+	addEvent(newEvent);
     }
 }
 
 // -----------------------------------------------------------------------
-// ErrorCommand:  Command to Create an Error Message Event
+// ErrorCommand: Command to Create an Error Message Event
 // -----------------------------------------------------------------------
 export class ErrorCommand extends BaseCommand {
-  constructor() {
-    super("error");
-  }
+    constructor() {
+	super("error");
+    }
 
-  /**
-   * Execute the command to create a new error message event.
-   * @param {string} fullText - The full text of the input.
-   */
-  execute(fullText) {
-    const message = fullText.substring(fullText.indexOf(' ') + 1);
-    eventManager.addEvent(this.createErrorEvent(message));
-  }
+    /**
+     * Execute the command to create a new error message event.
+     * @param {string} fullText - The full text of the input.
+     */
+    execute(fullText) {
+	const message = fullText.substring(fullText.indexOf(" ") + 1);
+	eventManager.addEvent(this.createErrorEvent(message));
+    }
 
-  createErrorEvent(message) { return {id: Date.now(), date: new Date(), isNew: true, type: "errorEvent", text: message, creationAnimation: "zipUp",}; }
+    createErrorEvent(message) {
+	return {
+	    id: Date.now(),
+	    date: new Date(),
+	    isNew: true,
+	    type: "errorEvent",
+	    text: message,
+	    creationAnimation: "zipUp",
+	};
+    }
 }
 
 // Register ChatCommand as the default command.
 if (typeof window !== "undefined") {
     CommandRegistry.registerDefault(new ChatCommand());
-  CommandRegistry.register(new ErrorCommand());
+    CommandRegistry.register(new ErrorCommand());
 }

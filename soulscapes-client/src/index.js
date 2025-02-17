@@ -6,6 +6,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
+import EventTarget from "./utils/sloggerEventTarget.js";
 
 //window.PIXI = PIXI;  //This must be after all imports
 
@@ -14,6 +15,11 @@ slogConfig({
     // Set the main (file/socket) log level to "debug"
     slog: ["debug", // write to console
 	   // Enable socket logging and set the endpoint to the default server endpoint.
+	   {
+	       type: new EventTarget(),
+	       level: "error",
+	       
+	   },
 	   {
 	       type: "remote",
 	       endpoint: "/logs",

@@ -81,21 +81,50 @@
 	    const ms = String(date.getMilliseconds()).padStart(3, "0");
 	    return `${this._lastFormattedSecond}.${ms} ${this._lastTz}`;
 	},
+
+	// Inside Formatter.stringify in slogger.js:
 	stringify(arg) {
+	    // If arg is an instance of Error, produce a structured summary.
 	    if (arg instanceof Error) {
 		try {
-		    return JSON.stringify({ message: arg.message, stack: arg.stack });
+		    return JSON.stringify({
+			message: arg.message,
+			stack: arg.stack && arg.stack.split('\n').slice(0, 5).join('\n') // first 5 lines of stack
+		    });
 		} catch (e) {
 		    return arg.toString();
 		}
-	    } else if (typeof arg === "object") {
+	    }
+	    // Check if we're in a Node environment and if util.inspect is available.
+	    if (isNode && typeof require === "function") {
+		try {
+		    const util = require("util");
+		    // Special handling for MediaStream objects.
+		    if (typeof MediaStream !== "undefined" && arg instanceof MediaStream) {
+			return `MediaStream (tracks: ${arg.getTracks().length})`;
+		    }
+		    // Use util.inspect with a reasonable depth.
+		    return util.inspect(arg, { depth: 2, colors: false });
+		} catch (e) {
+		    // Fallback if util.inspect isn't available.
+		    try {
+			return JSON.stringify(arg);
+		    } catch (jsonErr) {
+			return String(arg);
+		    }
+		}
+	    } else {
+		// In browser, add a check for MediaStream.
+		if (typeof MediaStream !== "undefined" && arg instanceof MediaStream) {
+		    return `MediaStream (tracks: ${arg.getTracks().length})`;
+		}
+		// Try a simple JSON conversion.
 		try {
 		    return JSON.stringify(arg);
 		} catch (e) {
 		    return String(arg);
 		}
 	    }
-	    return String(arg);
 	},
 	getDefaultEmoji(level) {
 	    switch (level) {
@@ -367,7 +396,7 @@
 	    this.options = Object.assign({}, config);
 	    this.customLogger = config.type;
 	    if (typeof this.customLogger.logMessage !== "function") {
-		throw new Error("Custom target must implement logMessage()");
+		throw new Error("Custom target must implement logMessage() "+JSON.stringify(config));
 	    }
 	}
 	logMessage(details) {
@@ -406,11 +435,14 @@
     // -------------------------------------------------------------------------
     function createTarget(selector, cfg) {
 	const config = typeof cfg === "string" ? { type: "console", level: cfg } : cfg;
+	if (typeof config.type !== "string")
+	    return new CustomTarget(selector, config);
+	
 	const type = (config.type || "console").toLowerCase();
 	if (type === "console") return new ConsoleTarget(selector, config);
 	if (type === "file") return new FileTarget(selector, config);
 	if (type === "remote") return new RemoteTarget(selector, config);
-	return new CustomTarget(selector, config);
+	throw new Error("unexpected type of slog: "+type);
     }
 
     // -------------------------------------------------------------------------
@@ -472,7 +504,7 @@
     function csdebug(component, ...args) { log("debug", component, args); }
     function cslog(component, ...args)   { log("log", component, args); }
     function cswarn(component, ...args)  { log("warn", component, args); }
-    function cerror(component, ...args)  { log("error", component, args); }
+    function cserror(component, ...args)  { log("error", component, args); }
 
     // -------------------------------------------------------------------------
     // Configuration Functions
@@ -535,7 +567,7 @@
 		switch (parsed.level) {
 		case "debug": csdebug(finalComponent, opts, parsed.message); break;
 		case "warn":  cswarn(finalComponent, opts, parsed.message); break;
-		case "error": cerror(finalComponent, opts, parsed.message); break;
+		case "error": cserror(finalComponent, opts, parsed.message); break;
 		default:      cslog(finalComponent, opts, parsed.message); break;
 		}
 	    });
@@ -574,7 +606,7 @@
     // -------------------------------------------------------------------------
     return {
 	sdebug, slog, swarn, serror,
-	csdebug, cslog, cswarn, cerror,
+	csdebug, cslog, cswarn, cserror,
 	slogConfig, slogConfigAdd,
 	slogExpressEndpoint, slogParseLine
     };

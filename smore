@@ -375,7 +375,7 @@ class View {
     }
 
     setCmdHelp() {
-        const helpText = `File: ${this.filePath} [q:quit, /:command, C:copy screen, home/end for jump]`;
+        const helpText = `${this.filePath} [q:quit, /:command, c:copy visible]`;
         const width = this.screen.width;
         const truncated = helpText.length > width ? helpText.substring(0, width) : helpText;
         this.cmdBox.setContent(truncated);
@@ -429,15 +429,20 @@ class View {
             const concise = this.formatConciseDate(parsed.timestamp);
             if (concise) parts.push(`[${concise}]`);
         }
-        if (parsed.component) {
-            if (parsed.component.startsWith('_remote')) {
-                const match = parsed.component.match(/_remote\[(.*?)\]/);
-                parts.push(match ? '🌐[' + match[1] + ']' : '🌐');
-            } else {
-                parts.push('.' + parsed.component);
-            }
-        }
-        if (parsed.level && parsed.level !== 'log') {
+	if (parsed.component) {
+	    if (parsed.component.startsWith('_remote')) {
+		const match = parsed.component.match(/^_remote\[(.*?)\](.*)$/);
+		if (match) {
+		    // match[1] = remote ID, match[2] = remainder (e.g. ".avatar")
+		    parts.push(`🌐[${match[1]}]${match[2]}`);
+		} else {
+		    parts.push("🌐");
+		}
+	    } else {
+		parts.push('.' + parsed.component);
+	    }
+	}
+	if (parsed.level && parsed.level !== 'log') {
             parts.push(parsed.level + ':');
         }
         if (parsed.message) {
@@ -513,9 +518,13 @@ class View {
         this.screen.key(['left'], () => { if (!this.cmdActive) this.scroll(-5); });
         this.screen.key(['right'], () => { if (!this.cmdActive) this.scroll(5); });
         this.screen.key(['/'], () => { if (!this.cmdActive) this.enterCommandMode(); });
-        this.screen.key(['c'], () => {
+        this.screen.key(['S-c'], () => {
             slog("copying screen to clipboard");
             if (!this.cmdActive) this.copyScreen();
+        });
+        this.screen.key(['c'], () => {
+            slog("copying visible lines to clipboard");
+            if (!this.cmdActive) this.copyVisibleLines();
         });
         this.screen.key(['C-l'], async () => {
             slog("refreshing screen");
@@ -601,20 +610,61 @@ class View {
         return `Command executed: ${commandText}\nParsed log: ${JSON.stringify(parsedLog)}`;
     }
 
-    async copyScreen() {
-        const content = this.contentBox.getContent();
-        const cmd = this.cmdBox.getContent();
-        const fullScreenText = content.split('\n').concat([cmd]).join('\n');
-        await clipboardy.writeSync("====== smore screenshot ======\n" + fullScreenText);
-        this.cmdBox.setContent("Screen copied to clipboard");
-        this.screen.render();
-        setTimeout(() => {
+
+    async copyVisibleLines() {
+	const path = require('path');
+	const baseName = path.basename(this.filePath);
+	
+	// Regex to strip ANSI escape sequences.
+	const ansiRegex = /\x1B\[[0-?]*[ -/]*[@-~]/g;
+
+	// Calculate how many rows are visible in the content box.
+	const totalRows = this.contentBox.height;
+
+	// Get only the visible lines from the buffer.
+	// (Assuming buffer.lines is an array of objects with a 'text' property.)
+	let visibleLines = this.buffer.lines.slice(this.buffer.topIndex, this.buffer.topIndex + totalRows);
+
+	// Map over the visible lines, stripping ANSI codes.
+	const linesText = visibleLines.map(line => (line.text || '').replace(ansiRegex, ''));
+
+	// Build the full text to copy.
+	const output = `====== ${baseName} lines ====== \n${linesText.join('\n')}`;
+
+	// Copy to clipboard.
+	await clipboardy.writeSync(output);
+
+	// Update the command box to inform the user.
+	this.cmdBox.setContent(`${baseName} lines copied to clipboard`);
+	this.screen.render();
+
+	setTimeout(() => {
             if (!this.cmdActive) {
-                this.setCmdHelp();
-                this.screen.realloc();
-                this.screen.render();
+		this.setCmdHelp();
+		this.screen.realloc();
+		this.screen.render();
             }
-        }, 2000);
+	}, 2000);
+    }
+    
+    // Inside the View class in smore:
+    async copyScreen() {
+	// Get the content from the main content box only.
+	const content = this.contentBox.getContent();
+	// Use the filePath property to extract the basename.
+	const path = require('path');
+	const baseName = path.basename(this.filePath);
+	const prefix = `====== ${baseName} ======\n`;
+	await clipboardy.writeSync(prefix + content);
+	this.cmdBox.setContent(`${baseName} copied to clipboard`);
+	this.screen.render();
+	setTimeout(() => {
+            if (!this.cmdActive) {
+		this.setCmdHelp();
+		this.screen.realloc();
+		this.screen.render();
+            }
+	}, 2000);
     }
 }
 

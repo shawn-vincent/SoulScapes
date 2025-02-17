@@ -12,6 +12,7 @@ import CommandLine from "../components/CommandLine";
 import spotManager from "../services/SpotManager";
 import localAvatarManager from "../services/LocalAvatarManager";
 import remoteAvatarManager from "../services/RemoteAvatarManager";
+import { slog, serror } from "../../../shared/slogger.js";
 
 // Styled Components using Emotion
 const SpotContainer = styled.div`
@@ -93,112 +94,121 @@ const SideMenu = styled.div`
 `;
 
 const Spot = () => {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [connectionStatus, setConnectionStatus] = useState(
-    localAvatarManager.getAvatarData().connectionStatus
-  );
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const [connectionStatus, setConnectionStatus] = useState(
+	localAvatarManager.getAvatarData().connectionStatus
+    );
 
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    useEffect(() => {
+	const handleResize = () => setWindowWidth(window.innerWidth);
+	window.addEventListener("resize", handleResize);
+	return () => window.removeEventListener("resize", handleResize);
+    }, []);
 
-  const hasJoined = useRef(false);
-  useEffect(() => {
-    if (!hasJoined.current) {
-      spotManager.joinSpot("lobby");
-      hasJoined.current = true;
-    }
-    const updateStatus = (status) => setConnectionStatus(status);
-    localAvatarManager.on("statusChanged", updateStatus);
-    return () => {
-      localAvatarManager.off("statusChanged", updateStatus);
-    };
-  }, []);
+    const hasJoined = useRef(false);
+    useEffect(() => {
+	slog("Spot.js: useEffect mounted");
 
-  const [avatars, setAvatars] = useState(
-    remoteAvatarManager.getAvatarsForCurrentRoom()
-  );
-  const [localAvatar, setLocalAvatar] = useState(
-    localAvatarManager.getAvatarData()
-  );
+	if (!hasJoined.current) {
+	    slog("Spot.js: joinSpot('lobby')");
+	    spotManager.joinSpot("lobby")
+		.then(() => {
+		    slog("Spot.js: joinSpot resolved");
+		})
+		.catch((err) => {
+		    serror("Spot.js: Error during joinSpot", err);
+		});
+	    hasJoined.current = true;
+	}
+	const updateStatus = (status) => setConnectionStatus(status);
+	localAvatarManager.on("statusChanged", updateStatus);
+	return () => {
+	    localAvatarManager.off("statusChanged", updateStatus);
+	};
+    }, []);
 
-  useEffect(() => {
-    const updateAvatars = () => {
-      setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
-    };
-    const updateLocalAvatar = () => {
-      setLocalAvatar({ ...localAvatarManager.getAvatarData() });
-    };
-    remoteAvatarManager.on("updated", updateAvatars);
-    localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
-    return () => {
-      remoteAvatarManager.off("updated", updateAvatars);
-      localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
-    };
-  }, []);
+    const [avatars, setAvatars] = useState(
+	remoteAvatarManager.getAvatarsForCurrentRoom()
+    );
+    const [localAvatar, setLocalAvatar] = useState(
+	localAvatarManager.getAvatarData()
+    );
 
-  const toggleMenu = () => setMenuOpen((prev) => !prev);
+    useEffect(() => {
+	const updateAvatars = () => {
+	    setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
+	};
+	const updateLocalAvatar = () => {
+	    setLocalAvatar({ ...localAvatarManager.getAvatarData() });
+	};
+	remoteAvatarManager.on("updated", updateAvatars);
+	localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
+	return () => {
+	    remoteAvatarManager.off("updated", updateAvatars);
+	    localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
+	};
+    }, []);
 
-  // Render the message area using EventPane (which now manages events via EventManager).
-  const renderMessageArea = () => <EventPane />;
+    const toggleMenu = () => setMenuOpen((prev) => !prev);
 
-  // Render the avatar area.
-  const renderAvatarArea = () => (
-    <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
-      <AvatarClusterContainer>
-          <AvatarClusterLayout avatarSize={80}>
+    // Render the message area using EventPane (which now manages events via EventManager).
+    const renderMessageArea = () => <EventPane />;
+
+    // Render the avatar area.
+    const renderAvatarArea = () => (
+	    <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
+	    <AvatarClusterContainer>
+            <AvatarClusterLayout avatarSize={80}>
             {avatars.map((avatar) => (
-              <Avatar key={avatar.id} data={avatar} />
+		    <Avatar key={avatar.id} data={avatar} />
             ))}
-          </AvatarClusterLayout>
-      </AvatarClusterContainer>
-      <AvatarGridContainer>
-          <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
+        </AvatarClusterLayout>
+	    </AvatarClusterContainer>
+	    <AvatarGridContainer>
+            <AvatarHorizontalGridLayout avatarSize={80} gap={10}>
             <Avatar
-              data={{
-                ...localAvatarManager.getAvatarData(),
-                connectionStatus,
-              }}
+        data={{
+            ...localAvatarManager.getAvatarData(),
+            connectionStatus,
+        }}
             />
-          </AvatarHorizontalGridLayout>
-      </AvatarGridContainer>
-    </DividedLayout>
-  );
+            </AvatarHorizontalGridLayout>
+	    </AvatarGridContainer>
+	    </DividedLayout>
+    );
 
-  // Desktop layout: side-by-side vertical DividedLayout.
-  const renderDesktopContent = () => (
-    <DividedLayout
-      orientation="vertical"
-      initialPrimaryRatio={0.25}
-      segmentLabels={[
-        <ChatTeardropText key="messages" size={24} weight="fill" />,
-        <Users key="avatars" size={24} weight="fill" />,
-      ]}
-    >
-      {renderMessageArea()}
-      {renderAvatarArea()}
-    </DividedLayout>
-  );
+    // Desktop layout: side-by-side vertical DividedLayout.
+    const renderDesktopContent = () => (
+	    <DividedLayout
+	orientation="vertical"
+	initialPrimaryRatio={0.25}
+	segmentLabels={[
+		<ChatTeardropText key="messages" size={24} weight="fill" />,
+		<Users key="avatars" size={24} weight="fill" />,
+	]}
+	    >
+	    {renderMessageArea()}
+	{renderAvatarArea()}
+	</DividedLayout>
+    );
 
-  return (
-    <SpotContainer>
-      <TitleBar>
-        <Hamburger onClick={toggleMenu} aria-label="Toggle menu">
-          <List size={24} weight="regular" color="#fff" />
-        </Hamburger>
-        <TitleText>Lobby</TitleText>
-      </TitleBar>
-      <MainContent>{renderDesktopContent()}</MainContent>
-      <CommandLine />
-      <SideMenu open={menuOpen}>
-        <h4>Side Menu</h4>
-        <p>Menu content or navigation links can go here.</p>
-      </SideMenu>
-    </SpotContainer>
-  );
+    return (
+	    <SpotContainer>
+	    <TitleBar>
+            <Hamburger onClick={toggleMenu} aria-label="Toggle menu">
+            <List size={24} weight="regular" color="#fff" />
+            </Hamburger>
+            <TitleText>Lobby</TitleText>
+	    </TitleBar>
+	    <MainContent>{renderDesktopContent()}</MainContent>
+	    <CommandLine />
+	    <SideMenu open={menuOpen}>
+            <h4>Side Menu</h4>
+            <p>Menu content or navigation links can go here.</p>
+	    </SideMenu>
+	    </SpotContainer>
+    );
 };
 
 export default Spot;

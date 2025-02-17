@@ -4,6 +4,8 @@ import Spot from "./pages/Spot";
 import DemoPage from "./pages/DemoPage";
 import TestComponent from "./TestComponent";
 import ErrorOverlay from "./components/ErrorOverlay";
+import { HostEnvironmentProvider } from "./context/HostEnvironmentContext";
+
 
 function App() {
     const [globalError, setGlobalError] = useState(null);
@@ -34,14 +36,16 @@ function App() {
 
     return (
 	<>
-	    {globalError && (
-		<ErrorOverlay
-		    error={globalError}
-		    onClose={() => setGlobalError(null)}
-		/>
-	    )}
-	    <Spot/>
-	    {/*<DemoPage />*/}
+	    <HostEnvironmentProvider>
+		{globalError && (
+		    <ErrorOverlay
+			error={globalError}
+			onClose={() => setGlobalError(null)}
+		    />
+		)}
+		<Spot/>
+		{/*<DemoPage />*/}
+            </HostEnvironmentProvider>
 
 	</>
     );

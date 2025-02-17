@@ -9,95 +9,109 @@ processed_patterns=22,854
         pattern=25,939
 filtered_files=40,1320
 
+docs/playingWithSloggingConfig.txt,435
+    function formatMessage(606,23084
+    function logMessage(639,24655
+    function sdebug(698,27066
+    function slog(704,27329
+    function swarn(710,27586
+    function serror(716,27846
+    function csdebug(724,28177
+    function cslog(730,28479
+    function cswarn(736,28775
+    function cerror(742,29074
+    function slogConfig(750,29414
+    function slogParseLine(827,33055
+    function slogExpressEndpoint(884,34944
+
 git_push_all.sh,121
 commit_message=10,295
     m) commit_message=15,410
     *) ./slog "Usage: $0 [-m \"commit message\"]" >&2; exit 16,445
 
+package-lock.json,82
+  "requires": true,4,50
+      "peer": true,45,1798
+      "peer": true,131,5152
+
 server_start.sh,118
 SERVER_DIR=7,214
 cd "$SERVER_DIR" || { ./slog error "❌ Failed to change directory to '$SERVER_DIR'."; exit 16,494
 
-shared/slogger.js,1068
-    function formatTimestamp(217,9407
-    function getTimezoneAbbr(238,10293
-    function errorToObject(254,10900
-    function stringify(269,11339
-    function startsWithEmoji(287,11731
-    function getDefaultEmoji(292,11892
-    function performSubstitution(306,12354
-    function processLogArgs(315,12753
-    function processComponentLogArgs(336,13482
-    function initFileLogging(361,14405
-    function rotateLogFileSizeBased(378,15081
-    function getTimestampForFilename(429,17597
-    function writeLogToFileSync(442,18139
-    function flushSocketBuffer(467,19387
-    function sendLogToSocket(522,21704
-    function ensureInitialized(589,24758
-    function logMessage(601,25401
-    function sdebug(669,28363
-    function slog(678,28700
-    function swarn(683,28868
-    function serror(692,29201
-    function csdebug(703,29606
-    function cslog(712,29982
-    function cswarn(717,30189
-    function cerror(726,30561
-    function slogConfig(739,31169
-    function slogExpressEndpoint(817,34691
-    function slogExpressEndpointx(879,36697
+shared/slogger.js,579
+    function processArgs(132,4681
+    function rebuildTargetIndex(387,13982
+    function createTarget(407,14658
+    function dispatchLog(422,15416
+    function log(456,16730
+    function sdebug(467,17227
+    function slog(468,17284
+    function swarn(469,17339
+    function serror(470,17395
+    function csdebug(475,17661
+    function cslog(476,17737
+    function cswarn(477,17811
+    function cerror(478,17886
+    function slogConfig(483,18156
+    function slogConfigAdd(487,18237
+    function slogExpressEndpoint(509,19141
+    function slogParseLine(552,20763
 
-slog,202
-const 24,814
-const __dirname 30,1027
-let configPath 34,1217
-const args 60,1979
-const possibleLevel 68,2209
-let level,69,2254
-let level, messageArgs;69,2254
-} else 73,2399
-const message 79,2508
+slog,227
+const 26,964
+const __dirname 32,1209
+let configPath 36,1399
+const args 66,2211
+const possibleLevel 74,2450
+let level,75,2495
+let level, remainingArgs;75,2495
+} else 79,2644
+let component 85,2755
+const message 98,3206
 
-soulscapes-client/craco.config.js,85
+smore,37
+function formatScrollText(705,25468
+
+soulscapes-client/craco.config.js,106
 const path 2,19
 const ReactRefreshWebpackPlugin 3,49
-module.exports exports6,134
+const webpack 4,132
+module.exports exports7,188
 
-soulscapes-client/package-lock.json,1393
+soulscapes-client/package-lock.json,1394
     "requires": true,5,85
-            "dev": true,2085,98420
-            "devOptional": true,2110,99407
-            "devOptional": true,2123,100006
-            "optional": true,3112,143628
-            "devOptional": true,3541,162765
-            "devOptional": true,3548,163129
-            "devOptional": true,3555,163491
-            "devOptional": true,3562,163853
-            "dev": true,5616,257623
-            "hasInstallScript": true,5906,270737
-            "hasInstallScript": true,5930,271810
-            "dev": true,5963,273337
-            "devOptional": true,5983,274074
-            "devOptional": true,6674,303501
-            "optional": true,7259,329141
-            "dev": true,8282,373023
-            "hasInstallScript": true,8543,383819
-            "optional": true,8545,383887
-            "dev": true,9693,432576
-            "dev": true,9908,441496
-            "devOptional": true,11386,506024
-            "dev": true,12126,537724
-            "dev": true,15015,661411
-            "optional": true,15447,680209
-            "devOptional": true,16344,718930
-            "devOptional": true,16388,720692
-            "devOptional": true,16401,721200
-            "peer": true,16598,729745
-            "devOptional": true,16821,739810
-            "dev": true,17106,751818
-            "dev": true,17339,761698
-            "devOptional": true,17823,783921
+            "dev": true,2091,98680
+            "devOptional": true,2116,99667
+            "devOptional": true,2129,100266
+            "optional": true,3330,154647
+            "devOptional": true,3759,173784
+            "devOptional": true,3766,174148
+            "devOptional": true,3773,174510
+            "devOptional": true,3780,174872
+            "dev": true,5855,269704
+            "hasInstallScript": true,6145,282818
+            "hasInstallScript": true,6169,283891
+            "dev": true,6202,285418
+            "devOptional": true,6222,286155
+            "devOptional": true,6949,317290
+            "optional": true,7540,343239
+            "dev": true,8569,387439
+            "hasInstallScript": true,8830,398235
+            "optional": true,8832,398303
+            "dev": true,9995,447800
+            "dev": true,10216,457041
+            "devOptional": true,11694,521569
+            "dev": true,12449,553988
+            "dev": true,15400,680556
+            "optional": true,15838,699681
+            "devOptional": true,16803,741228
+            "devOptional": true,16847,742990
+            "devOptional": true,16860,743498
+            "peer": true,17057,752043
+            "devOptional": true,17280,762108
+            "dev": true,17565,774116
+            "dev": true,17798,783996
+            "devOptional": true,18282,806219
 
 soulscapes-client/package.json,26
     "private": true,4,59
@@ -120,12 +134,19 @@ Pinch Zoom Box6,142
 const view = (() => {zoomMe28,600
 
 soulscapes-client/src/App.js,20
-function App(6,154
+function App(8,240
+
+soulscapes-client/src/TestComponent.js,63
+const TestComponent 5,122
+export default TestComponent;9,229
+
+soulscapes-client/src/components/AnimationManager.js,37
+function installAnimation(366,10316
 
 soulscapes-client/src/components/Avatar.js,71
-import React,2,75
-const Avatar 6,301
-export default Avatar;104,2597
+import React,3,87
+const Avatar 7,277
+export default Avatar;144,4042
 
 soulscapes-client/src/components/AvatarClusterLayout.js,148
 import React,2,26
@@ -160,6 +181,36 @@ import React,2,33
 const AvatarSpace 6,184
 export default AvatarSpace;63,2288
 
+soulscapes-client/src/components/CommandLine.js,834
+import React,1,0
+const InputContainer 5,136
+  bottom:bottom7,193
+  left:left8,206
+  height: 40px;px10,232
+  display: flex;12,288
+  align-items: center;13,305
+  padding: 0 10px;px14,328
+  box-sizing: border-box;box15,347
+  z-index:index16,373
+const TextInput 19,391
+  color: black;22,484
+  height: calc(100% - 8px)px23,500
+  margin: 4px;px24,528
+  border: none;25,543
+  padding: 4px;px26,559
+  font-size: 16px;px27,575
+  outline: none;28,594
+  border-radius: 20px;px29,611
+  box-sizing: border-box;box30,634
+export class BaseCommand 37,792
+    constructor(41,897
+    execute(52,1149
+export class SlogCommand extends BaseCommand 61,1330
+export const CommandRegistry 79,1678
+export class SlogErrorCommand extends BaseCommand 150,3720
+const CommandLine 168,4066
+export default CommandLine;197,4681
+
 soulscapes-client/src/components/DividedLayout.js,129
 import React,2,35
 const DividedLayout 7,252
@@ -176,17 +227,101 @@ export default ErrorBoundary;29,767
 soulscapes-client/src/components/ErrorOverlay.js,31
 function ErrorOverlay(45,1009
 
+soulscapes-client/src/components/EventPane.js,2427
+import React,2,39
+const EventBase 15,703
+export const MessageEvent 19,775
+  margin: 10px;px21,894
+  padding: 10px;px22,910
+  color:color23,927
+  align-self: flex-start;start26,1006
+  border-radius: 8px;px27,1032
+  position: relative;28,1054
+export const InfoEvent 39,1245
+  margin: 10px auto;41,1361
+  padding: 10px;px42,1382
+  text-align: center;43,1399
+  color: #aaa;aaa44,1421
+  font-size: 0.9em;em45,1436
+  border-radius: 4px;px47,1496
+  width: fit-content;content48,1518
+export const ActionEvent 51,1544
+  margin: 10px auto;53,1662
+  padding: 10px;px54,1683
+  text-align: center;55,1700
+  color: #ddd;ddd56,1722
+  font-size: 0.9em;em57,1737
+  border-radius: 4px;px59,1801
+  width: fit-content;content60,1823
+export const ErrorEvent 63,1849
+  margin: 10px;px65,1966
+  padding: 10px;px66,1982
+  border-radius: 8px;px68,2041
+  box-shadow: 0 0 10px red;69,2063
+  align-self: flex-start;start71,2109
+  position: relative;72,2135
+  color: #fff;fff73,2157
+const AnimatedEventContainer 87,2519
+  z-index:index89,2584
+  transition: opacity 2s ease-out,out92,2751
+  transition: opacity 2s ease-out, transform 2s ease-out;out92,2751
+export const EventAnimationPlaceholder 103,3085
+export const EventComponent 173,5133
+export const EventComponent = React.forwardRef(({ event, dateTime }, ref)173,5133
+const markEventAsFinal 199,5950
+const EventPanelScrollContainer 212,6407
+  overflow: hidden;215,6484
+  position: relative;216,6504
+  display: flex;217,6526
+  flex-direction: column;218,6543
+  padding:padding224,6676
+  margin:margin225,6690
+const EventPanelContent 229,6737
+  display: flex;231,6786
+  flex-direction: column-reverse;reverse232,6803
+  overflow-y: auto;233,6837
+  scroll-behavior: smooth;234,6857
+  padding:padding235,6884
+  margin:margin236,6898
+  -ms-overflow-style: none;237,6911
+  scrollbar-width: none;238,6939
+  position: relative;242,7012
+const ScrollIndicator 246,7073
+  width: 40px;px250,7175
+  height: 40px;px251,7190
+  display: flex;254,7268
+  align-items: center;255,7285
+  justify-content: center;256,7308
+  pointer-events: none;257,7335
+  transition: opacity 0.3s ease-in-out;out259,7406
+const TopScrollIndicator 262,7450
+const BottomScrollIndicator 266,7519
+export function EventPane(273,7800
+export class ChatCommand extends BaseCommand 332,9723
+export class ErrorCommand extends BaseCommand 357,10387
+
+soulscapes-client/src/components/EventScroller.js,109
+import React,1,0
+const EventScroller 4,124
+const formatDate 57,1896
+export default EventScroller;65,2051
+
 soulscapes-client/src/components/MessageList.js,59
 const MessageList 4,75
 export default MessageList;13,277
 
+soulscapes-client/src/components/PixiContainer.js,82
+import React,1,0
+const PixiContainer 4,84
+export default PixiContainer;42,1320
+
 soulscapes-client/src/components/ScrollLayout.js,176
-import React,2,75
-const isTrue 8,399
-const DebugScrolling 11,470
-const ScrollLayout 13,501
-ScrollLayout.propTypes propTypes221,6779
-export default ScrollLayout;229,7111
+import React,2,74
+const isTrue 8,398
+const DebugScrolling 11,469
+const ScrollLayout 13,500
+ScrollLayout.propTypes propTypes221,6778
+export default ScrollLayout;229,7110
 
 soulscapes-client/src/components/SegmentedControl.js,69
 const SegmentedControl 4,80
@@ -204,38 +339,151 @@ ZoomControl.propTypes propTypes23,785
 export default ZoomControl;29,934
 
 soulscapes-client/src/index.js,19
-const root 30,917
+const root 33,883
 
-soulscapes-client/src/pages/Room.js,68
+soulscapes-client/src/pages/DemoPage.js,902
+import React,2,39
+const Background 21,715
+  top:top23,765
+  left:left24,775
+  background-size: cover;28,1095
+  background-position: center;29,1121
+const PageContainer 33,1171
+  max-width: 800px;px35,1219
+  height: 80vh;vh36,1239
+  margin: 5vh auto;37,1255
+  border-radius: 10px;px38,1275
+  padding: 10px;px39,1298
+  position: relative;40,1315
+  overflow: auto;41,1337
+const ButtonBar 44,1359
+  justify-content: center;46,1406
+  margin-bottom: 10px;px47,1433
+const StyledButton 50,1460
+  color: white;52,1540
+  border: none;53,1556
+  padding: 8px 16px;px54,1572
+  border-radius: 4px;px55,1593
+  cursor: pointer;56,1615
+  font-size: 1em;em57,1634
+const PixiContainer 63,1718
+  top:top65,1771
+  left:left66,1781
+  width: 100vw;vw67,1792
+  height: 100vh;vh68,1808
+  pointer-events: none;69,1825
+  z-index:index70,1849
+export default function DemoPage(76,2039
+
+soulscapes-client/src/pages/Room.js.off,68
 import React,2,21
 const Room 16,737
 export default Room;157,5048
 
+soulscapes-client/src/pages/Spot.js,1382
+import React,1,0
+const SpotContainer 18,861
+  height: 100vh;vh20,911
+  overflow: hidden;21,928
+  position: relative;22,948
+  background-size: cover;24,1074
+  background-position: center;25,1100
+const TitleBar 28,1135
+  top:top30,1186
+  left:left31,1196
+  height: 30px;px33,1222
+  display: flex;35,1278
+  align-items: center;36,1295
+  padding: 0 10px;px37,1318
+  box-sizing: border-box;box38,1337
+  z-index:index39,1363
+const Hamburger 42,1381
+  border: none;44,1434
+  cursor: pointer;45,1450
+  color: #fff;fff46,1469
+const TitleText 49,1488
+  color: #fff;fff51,1540
+  font-size: 16px;px52,1555
+  white-space: nowrap;53,1574
+  overflow: hidden;54,1597
+  text-overflow: ellipsis;55,1617
+const MainContent 58,1648
+  top: 30px;px60,1702
+  bottom: 40px;px61,1715
+  left:left62,1771
+  right:right63,1782
+  overflow: hidden;64,1794
+const AvatarClusterContainer 67,1818
+  box-sizing: border-box;box70,1892
+const AvatarGridContainer 73,1922
+  padding: 5px;px76,1993
+  box-sizing: border-box;box77,2009
+const SideMenu 80,2039
+  top: 30px;px82,2090
+  left:left83,2103
+  width: 250px;px84,2114
+  transition: transform 0.3s ease;88,2317
+  z-index:index89,2352
+  color: #fff;fff90,2368
+  padding: 10px;px91,2383
+  box-sizing: border-box;box92,2400
+  overflow-y: auto;93,2426
+const Spot 96,2450
+export default Spot;214,6055
+
+soulscapes-client/src/services/EventManager.js,261
+class EventManager 4,79
+  constructor(5,100
+  addEvent(14,281
+  getSnapshot(23,462
+  subscribe(32,656
+  emitChange(40,810
+const eventManager 47,903
+export function useEvents(53,1027
+export function addEvent(65,1320
+export default eventManager;69,1389
+
 soulscapes-client/src/services/LocalAvatarManager.js,130
-class LocalAvatarManager extends EventEmitter 4,115
-const localAvatarManager 85,2242
-export default localAvatarManager;86,2295
+class LocalAvatarManager extends EventEmitter 5,137
+const localAvatarManager 95,3201
+export default localAvatarManager;96,3254
 
 soulscapes-client/src/services/RemoteAvatarManager.js,133
-class RemoteAvatarManager extends EventEmitter 5,141
-const remoteAvatarManager 53,1157
-export default remoteAvatarManager;54,1212
+class RemoteAvatarManager extends EventEmitter 5,140
+const remoteAvatarManager 53,1156
+export default remoteAvatarManager;54,1211
 
-soulscapes-client/src/services/RoomManager.js,443
-class RoomManager 7,297
-    constructor(8,317
-    async joinRoom(57,1878
-    rejoinRoom(87,2637
-    async handleUserList(97,2916
-    async handleNewUser(104,3085
-    async handleUserLeft(114,3333
-    async startCall(118,3408
-    async handleOffer(171,5221
-    async handleIceCandidate(220,6925
-    async handleAnswer(232,7368
-const roomManager 250,7856
-window.roomManager roomManager251,7895
-export default roomManager;252,7929
+soulscapes-client/src/services/RoomManager.js.off,443
+class RoomManager 7,296
+    constructor(8,316
+    async joinRoom(59,1915
+    rejoinRoom(89,2674
+    async handleUserList(99,2953
+    async handleNewUser(106,3122
+    async handleUserLeft(116,3370
+    async startCall(120,3445
+    async handleOffer(173,5258
+    async handleIceCandidate(222,6962
+    async handleAnswer(234,7405
+const roomManager 252,7893
+window.roomManager roomManager253,7932
+export default roomManager;254,7966
+
+soulscapes-client/src/services/SpotManager.js,443
+class SpotManager 8,327
+    constructor(9,347
+    async joinSpot(55,1716
+    rejoinSpot(85,2441
+    async handleUserList(95,2720
+    async handleNewUser(102,2889
+    async handleUserLeft(110,3135
+    async startCall(114,3210
+    async handleOffer(165,4930
+    async handleIceCandidate(214,6634
+    async handleAnswer(226,7077
+const spotManager 244,7565
+window.spotManager spotManager245,7604
+export default spotManager;246,7638
 
 soulscapes-client/src/utils/safeSocket.js,144
 export function wrapError(40,1364
@@ -250,10 +498,10 @@ soulscapes-server/package-lock.json,25
   "requires": true,5,79
 
 soulscapes-server/server.js,123
-function wrapError(16,545
-function safeSocketHandler(29,1074
-function safeOn(61,2194
-    function flattenError(86,3178
+function wrapError(16,542
+function safeSocketHandler(29,1071
+function safeOn(61,2191
+    function flattenError(91,3308
 
 tags_generate.sh,19
 file_count=32,925
@@ -267,7 +515,7 @@ soulscapes-server/package.json,0
 
 soulscapes-client/src/services/*log2*,0
 
-soulscapes-client/src/pages/Room.module.css,0
+soulscapes-client/src/pixi-setup.js,0
 
 soulscapes-client/src/index.css,0
 
@@ -278,6 +526,10 @@ soulscapes-client/src/components/SegmentedControl.module.css,0
 soulscapes-client/src/components/ScrollLayout.module.css,0
 
 soulscapes-client/src/components/MessageList.module.css,0
+
+soulscapes-client/src/components/EventScroller.txt,0
+
+soulscapes-client/src/components/EventScroller.module.css,0
 
 soulscapes-client/src/components/AvatarSpace.module.css,0
 
@@ -294,5 +546,7 @@ soulscapes-client/public/manifest.json,0
 soulscapes-client/public/logo192.png,0
 
 soulscapes-client/public/favicon.ico,0
+
+package.json,0
 
 .gitignore,0
