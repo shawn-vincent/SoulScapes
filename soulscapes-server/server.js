@@ -78,6 +78,21 @@ slogExpressEndpoint(app, "/logs", function(req) {
     return req && req.ip ? req.ip : "unknown";
 });
 
+
+// NEW: Add the /leave-spot endpoint to handle proactive user departure.
+app.post("/leave-spot", express.json(), (req, res) => {
+    slog("/leave-spot ---------------------------");
+    const { spot, id } = req.body;
+    slog("body == ", req.body, spot, id);
+    if (rooms[spot] && rooms[spot][id]) {
+	delete rooms[spot][id];
+	slog(`User ${id} proactively left spot "${spot}" via sendBeacon`);
+	roomsNamespace.to(spot).emit("user-left", id);
+    }
+    res.sendStatus(200);
+});
+
+
 // -------------------------
 // Global Express Error Middleware
 // -------------------------
@@ -137,10 +152,6 @@ slogConfig({
 
 slog("Set up slog config");
 
-// NEW: Roll (rotate) all log files at startup.
-slogRollAllLogs();
-
-slog("Rolled log files");
 
 
 roomsNamespace.on("connection", safeSocketHandler("connection", (socket) => {

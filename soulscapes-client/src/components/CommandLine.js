@@ -3,9 +3,9 @@ import styled from '@emotion/styled';
 import { slog, serror } from '../../../shared/slogger';
 
 const InputContainer = styled.div`
-  position: absolute;
+  /*position: absolute;
   bottom: 0;
-  left: 0;
+  left: 0;*/
   width: 100%;
   height: 40px;
   background-color: rgba(0, 0, 0, 0.5);

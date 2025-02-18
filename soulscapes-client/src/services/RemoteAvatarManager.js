@@ -11,7 +11,12 @@ class RemoteAvatarManager extends EventEmitter {
     addUser(id, avatarData) {
 	if (this.avatars[id]) return;
 	// Initialize with no videoStream and mark as loading
-	this.avatars[id] = { ...avatarData, videoStream: null, isVideoLoading: true };
+	this.avatars[id] = {
+	    ...avatarData,
+	    local: false,
+	    videoStream: null,
+	    isVideoLoading: true
+	};
 	this.emit("updated");
     }
 
