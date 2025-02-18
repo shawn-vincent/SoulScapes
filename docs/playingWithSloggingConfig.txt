@@ -187,7 +187,7 @@ cslog("a.b", "Message")
  *
  * Public API functions:
  *   sdebug, slog, swarn, serror
- *   csdebug, cslog, cswarn, cerror
+ *   csdebug, cslog, cswarn, cserror
  *
  * Each log message is prefixed with a timestamp. If a component is provided,
  * it appears (preceded by a dot and a space) right after the timestamp.
@@ -215,7 +215,7 @@ cslog("a.b", "Message")
         global.csdebug = slogger.csdebug;
         global.cslog = slogger.cslog;
         global.cswarn = slogger.cswarn;
-        global.cerror = slogger.cerror;
+        global.cserror = slogger.cserror;
         global.slogConfig = slogger.slogConfig;
         global.slogExpressEndpoint = slogger.slogExpressEndpoint;
         module.exports = slogger;
@@ -229,7 +229,7 @@ cslog("a.b", "Message")
         global.csdebug = slogger.csdebug;
         global.cslog = slogger.cslog;
         global.cswarn = slogger.cswarn;
-        global.cerror = slogger.cerror;
+        global.cserror = slogger.cserror;
         global.slogConfig = slogger.slogConfig;
         global.slogExpressEndpoint = slogger.slogExpressEndpoint;
     }
@@ -399,7 +399,7 @@ cslog("a.b", "Message")
                     ? fs.statSync(config.logFile.path).size
                     : 0;
             } catch (err) {
-                cerror("slogger", "Error initializing log file", err);
+                cserror("slogger", "Error initializing log file", err);
             }
         }
     };
@@ -436,12 +436,12 @@ cslog("a.b", "Message")
                     try {
                         fs.unlinkSync(pathModule.join(dir, file));
                     } catch (e) {
-                        cerror("slogger", "Error deleting old rolled file", file, e);
+                        cserror("slogger", "Error deleting old rolled file", file, e);
                     }
                 });
             }
         } catch (err) {
-            cerror("slogger", "Size-based file rotation error", err);
+            cserror("slogger", "Size-based file rotation error", err);
             throw err;
         }
     };
@@ -739,7 +739,7 @@ cslog("a.b", "Message")
         const finalMsg = typeof msg === "string" ? formatMessage("warn", msg) : msg;
         logMessage("warn", finalMsg, remaining, component);
     }
-    function cerror(component, ...args) {
+    function cserror(component, ...args) {
         ensureInitialized();
         const { msg, remaining } = processComponentLogArgs(component, args);
         const finalMsg = typeof msg === "string" ? formatMessage("error", msg) : msg;
@@ -917,7 +917,7 @@ cslog("a.b", "Message")
         csdebug,
         cslog,
         cswarn,
-        cerror,
+        cserror,
         slogConfig,
         slogExpressEndpoint
     };

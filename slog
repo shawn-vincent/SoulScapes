@@ -23,7 +23,7 @@
  */
 
 import pkg from './shared/slogger.js'; // Adjust the relative path as needed.
-const { sdebug, slog, swarn, serror, csdebug, cslog, cswarn, cerror, slogConfig } = pkg;
+const { sdebug, slog, swarn, serror, csdebug, cslog, cswarn, cserror, slogConfig } = pkg;
 
 import { existsSync, readFileSync } from 'fs';
 import path from 'path';
@@ -107,7 +107,7 @@ if (component) {
       cswarn(component, message);
       break;
     case 'error':
-      cerror(component, message);
+      cserror(component, message);
       break;
     default:
       cslog(component, message);

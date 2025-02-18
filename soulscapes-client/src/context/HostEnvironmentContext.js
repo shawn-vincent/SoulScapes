@@ -1,7 +1,7 @@
 // src/context/HostEnvironmentContext.js
 import React, { createContext, useState, useCallback } from "react";
 import hostEnv from "../services/HostEnvironmentManager";
-import { slog, serror } from "../../../shared/slogger";
+import { slog, serror, cslog } from "../../../shared/slogger";
 
 /**
  * HostEnvironmentContext provides the following:
@@ -11,9 +11,6 @@ import { slog, serror } from "../../../shared/slogger";
  * - cameraError: Any error encountered when requesting the camera.
  * - requestCameraStream: A function to request (or re-request) the camera stream.
  * - getCurrentPosition: A function that wraps hostEnv.getCurrentPosition.
- *
- * @example
- *   const { environment, cameraStream, requestCameraStream } = useContext(HostEnvironmentContext);
  */
 export const HostEnvironmentContext = createContext({
   environment: "unknown",
@@ -25,9 +22,6 @@ export const HostEnvironmentContext = createContext({
 
 /**
  * HostEnvironmentProvider provides access to the HostEnvironmentManager's features.
- *
- * Unlike previous versions, this provider does NOT automatically activate the camera.
- * Instead, it exposes a method, requestCameraStream, that components can call when needed.
  *
  * @param {object} props
  * @param {React.ReactNode} props.children - The child components.
@@ -48,8 +42,7 @@ export const HostEnvironmentProvider = ({ children }) => {
    * @param {MediaStreamConstraints} [constraints={ video: true, audio: false }]
    * @returns {Promise<MediaStream>} Resolves with the MediaStream.
    *
-   * @example
-   *   const stream = await requestCameraStream({ video: true });
+   * Checks that at least one video track is present.
    */
   const requestCameraStream = useCallback(async (constraints = { video: true, audio: false }) => {
     if (!hostEnv.hasCameraAccess()) {
@@ -61,6 +54,18 @@ export const HostEnvironmentProvider = ({ children }) => {
     try {
       slog("HostEnvironmentProvider: Requesting camera stream with constraints:", constraints);
       const stream = await hostEnv.getCameraStream(constraints);
+
+      // Check if we have at least one video track
+      const videoTracks = stream.getVideoTracks();
+      if (!videoTracks.length) {
+        const noTracksErr = "No video tracks found in the returned stream.";
+        serror("HostEnvironmentProvider:", noTracksErr);
+        setCameraError(noTracksErr);
+        throw new Error(noTracksErr);
+      }
+
+      // If we do, store it
+      cslog("avatar", "Camera stream acquired. # of video tracks:", videoTracks.length);
       setCameraStream(stream);
       setCameraError(null);
       return stream;
@@ -76,9 +81,6 @@ export const HostEnvironmentProvider = ({ children }) => {
    *
    * @param {PositionOptions} [options={}]
    * @returns {Promise<GeolocationPosition>}
-   *
-   * @example
-   *   const pos = await getCurrentPosition({ timeout: 5000 });
    */
   const getCurrentPosition = useCallback(async (options = {}) => {
     try {

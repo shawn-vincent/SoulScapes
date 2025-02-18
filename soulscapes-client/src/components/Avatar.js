@@ -1,196 +1,135 @@
 // src/components/Avatar.js
-import { cslog, cerror, cswarn } from '../../../shared/slogger';
-import React, { useContext, useEffect, useRef, useState } from 'react';
-import AvatarConfigWindow from './AvatarConfigWindow';
+import React, { useEffect, useRef, useState } from 'react';
 import { CameraSlash } from '@phosphor-icons/react';
-import { HostEnvironmentContext } from "../context/HostEnvironmentContext";
 
 const Avatar = ({ data, onUpdate }) => {
-  const { cameraStream, cameraError, requestCameraStream } = useContext(HostEnvironmentContext);
-  const [isVideoLoading, setIsVideoLoading] = useState(true);
-  const [videoStatus, setVideoStatus] = useState("Loading video...");
   const videoRef = useRef(null);
+  const [videoStatus, setVideoStatus] = useState("Loading video...");
+  const currentStream = useRef(null);
 
-  // Log the current context value
+  // Attach or detach the video stream when data changes.
   useEffect(() => {
-    cslog("avatar", "Camera stream from context is:", cameraStream);
-  }, [cameraStream]);
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
 
-  // Request the camera stream if not available.
-  useEffect(() => {
-    if (!cameraStream && !cameraError) {
-      cslog("avatar", "📹 Requesting camera stream on demand.");
-      requestCameraStream({ video: true, audio: false }).catch((err) => {
-        cerror("avatar", "❌ Error requesting camera stream", err);
-      });
-    }
-  }, [cameraStream, cameraError, requestCameraStream]);
+    if (data.videoEnabled && data.videoStream) {
+      if (currentStream.current === data.videoStream) return;
 
-  // Attach the stream to the video element when available.
-  useEffect(() => {
-    if (cameraStream && videoRef.current) {
-      cslog("avatar", "🔗 Attaching camera stream to video element.");
-      videoRef.current.srcObject = cameraStream;
-      videoRef.current
-        .play()
-        .then(() => cslog("avatar", "▶️ Video play() promise resolved."))
-        .catch((err) => {
-          cerror("avatar", "❌ Error in video play() promise", err);
-          setVideoStatus("Error playing video");
-          setIsVideoLoading(false);
-        });
-      // Fallback: if after 1 second neither onLoadedMetadata nor onCanPlay fires, log a warning.
-      const fallbackTimer = setTimeout(() => {
-        if (isVideoLoading) {
-          cswarn("avatar", "⚠️ Video element did not fire onLoadedMetadata/onCanPlay within 1 second.");
-        }
-      }, 1000);
-      return () => clearTimeout(fallbackTimer);
-    }
-  }, [cameraStream, isVideoLoading]);
+      currentStream.current = data.videoStream;
+      videoEl.srcObject = data.videoStream;
+      setVideoStatus("Loading video...");
 
-  // Video event handlers.
-  const handleLoadedMetadata = () => {
-    cslog("avatar", "✅ onLoadedMetadata fired – video is ready.");
-    setVideoStatus("Playing");
-    setIsVideoLoading(false);
-  };
+      const handleCanPlay = () => {
+        videoEl.play()
+          .then(() => setVideoStatus("Playing"))
+          .catch((err) => {
+            console.error("Error in video play() promise:", err);
+            setVideoStatus("Error playing video");
+          });
+      };
 
-  const handleCanPlay = () => {
-    cslog("avatar", "✅ onCanPlay fired – video can start playing.");
-    setVideoStatus("Playing");
-    setIsVideoLoading(false);
-  };
+      const handleLoadedMetadata = () => {
+        // Optionally log metadata loaded.
+      };
 
-  const handleVideoError = (event) => {
-    const error = event.target.error;
-    cerror("avatar", "❌ Video element error", error);
-    setVideoStatus("Video error");
-    setIsVideoLoading(false);
-  };
+      const handleVideoError = (event) => {
+        const error = event?.target?.error;
+        console.error("Video element error:", error);
+        setVideoStatus("Video error" + (error ? `: ${error.message}` : ""));
+      };
 
-  const renderContent = () => {
-    if (cameraStream && videoStatus === "Playing") {
-      return (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          onLoadedMetadata={handleLoadedMetadata}
-          onCanPlay={handleCanPlay}
-          onError={handleVideoError}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            borderRadius: "50%",
-          }}
-        />
-      );
-    } else if (cameraError) {
-      cswarn("avatar", "⚠️ Camera error detected:", cameraError);
-      return (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#333",
-            borderRadius: "50%",
-            padding: "5px",
-            textAlign: "center",
-          }}
-          aria-label={`Camera error: ${cameraError}`}
-        >
-          <CameraSlash size={24} weight="duotone" color="#aaa" />
-          <div style={{ fontSize: "12px", marginTop: "5px" }}>
-            {cameraError}
-          </div>
-        </div>
-      );
-    } else if (isVideoLoading) {
-      return (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#333",
-            borderRadius: "50%",
-            color: "#aaa",
-            fontSize: "0.9em",
-            textAlign: "center"
-          }}
-          aria-label="Loading video..."
-        >
-          {videoStatus}
-        </div>
-      );
+      videoEl.addEventListener("canplay", handleCanPlay);
+      videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
+      videoEl.addEventListener("error", handleVideoError);
+
+      return () => {
+        videoEl.removeEventListener("canplay", handleCanPlay);
+        videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
+        videoEl.removeEventListener("error", handleVideoError);
+      };
     } else {
-      return (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "#333",
-            borderRadius: "50%",
-          }}
-          aria-label="Video unavailable, displaying default avatar"
-        >
-          <div style={{ fontSize: "1.5em", color: "#aaa" }}>
-            {data.initials}
-          </div>
-        </div>
-      );
+      videoEl.srcObject = null;
+      setVideoStatus(data.videoEnabled ? "Loading video..." : "Video Off");
     }
-  };
+  }, [data.videoStream, data.videoEnabled]);
 
+  // Determine overlay content based on status.
+  let overlayContent = null;
+  if (!data.videoEnabled) {
+    // When video is turned off, show initials and connection status.
+    overlayContent = (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.7)",
+        borderRadius: "50%",
+        width: "100%",
+        height: "100%",
+        color: "#fff"
+      }}>
+        <span style={{ fontSize: "1.2em" }}>{data.initials}</span>
+        <div style={{ marginTop: 5, fontSize: "0.8em" }}>{data.connectionStatus}</div>
+      </div>
+    );
+  } else if (videoStatus !== "Playing") {
+    // If not playing (including when an error occurs), display the status.
+    overlayContent = (
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "rgba(0,0,0,0.7)",
+        borderRadius: "50%",
+        width: "100%",
+        height: "100%",
+        color: "#fff"
+      }}>
+        <span style={{ fontSize: "0.9em" }}>{videoStatus}</span>
+      </div>
+    );
+  }
+
+  // Outer container style.
   const avatarStyle = {
+    position: "relative",
     width: `${data.size}px`,
     height: `${data.size}px`,
     borderRadius: "50%",
     backgroundColor: "black",
     border: `3px solid ${data.color}`,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
     overflow: "hidden"
   };
 
+  const videoStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    borderRadius: "50%"
+  };
+
   return (
-    <>
-      <div onClick={() => { /* Optionally open config */ }} style={{ position: "relative", cursor: "pointer" }}>
-        <div style={avatarStyle}>
-          {renderContent()}
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            top: "-10px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
-            color: "#fff",
-            padding: "3px 8px",
-            borderRadius: "5px",
-            fontSize: "12px",
-          }}
-        >
-          {data.connectionStatus}
-        </div>
+    <div style={{ position: "relative", cursor: "pointer" }}>
+      <div style={avatarStyle}>
+        <video ref={videoRef} muted playsInline style={videoStyle} />
+        {overlayContent}
       </div>
-      {/* Modal configuration window could be rendered here if needed */}
-    </>
+      {/* Badge with initials and connection status */}
+      <div style={{
+        position: "absolute",
+        top: "-10px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
+        color: "#fff",
+        padding: "3px 8px",
+        borderRadius: "5px",
+        fontSize: "12px",
+      }}>
+        {data.initials} {data.connectionStatus}
+      </div>
+    </div>
   );
 };
 

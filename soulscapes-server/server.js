@@ -4,7 +4,7 @@ import { Server } from "socket.io";
 // Import the logging library as a default export.
 import slogger from "../shared/slogger.js";
 
-const { slog, serror, slogExpressEndpoint, slogConfig } = slogger;
+const { slog, serror, slogExpressEndpoint, slogConfig, slogRollAllLogs } = slogger;
 
 /**
  * Wraps an error with additional context while preserving the original error.
@@ -136,6 +136,12 @@ slogConfig({
 });
 
 slog("Set up slog config");
+
+// NEW: Roll (rotate) all log files at startup.
+slogRollAllLogs();
+
+slog("Rolled log files");
+
 
 roomsNamespace.on("connection", safeSocketHandler("connection", (socket) => {
     // Extend the socket with a safeOn() method.

@@ -302,7 +302,8 @@ export function EventPane() {
 	    </TopScrollIndicator>
 	    <EventPanelContent ref={contentRef}>
 		{events.map((evt) => {
-		    const dateTimeStr = format(evt.date, "hh:mm:ss");
+		    const dateObj = evt.date instanceof Date ? evt.date : new Date(evt.date);
+		    const dateTimeStr = format(dateObj, "hh:mm:ss");
 		    return (
 			<EventAnimationPlaceholder
 			    key={evt.id}

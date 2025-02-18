@@ -58,6 +58,13 @@
 	_lastFormattedSecond: "",
 	_lastTz: "",
 	formatTimestamp(date) {
+
+	    if (!(date instanceof Date) || isNaN(date.getTime())) {
+		// Log a warning and fallback to current time.
+		console.error("Invalid date provided to formatTimestamp; using current time.", date);
+		date = new Date();
+	    }
+	    
 	    const t = date.getTime();
 	    const sec = Math.floor(t / 1000);
 	    if (sec !== this._lastSecond) {
@@ -260,7 +267,74 @@
 		this.flushBuffer();
 	    }, this.flushInterval);
 	}
-	flushBuffer() {
+	 flushBuffer() {
+            if (this.buffer.length === 0) return;
+            const data = this.buffer.join("\n") + "\n";
+            this.buffer = [];
+            const messageSize = Buffer.byteLength(data, "utf8");
+            // Check if rotation is needed.
+            if (this.rotateMaxSize > 0 && (this.currentFileSize + messageSize > this.rotateMaxSize)) {
+                // Call our roll() method.
+                this.roll();
+            }
+            fs.appendFile(this.path, data, (err) => {
+                if (err) console.error("File logging error:", err);
+                else this.currentFileSize += messageSize;
+            });
+        }
+        // NEW: Roll (rotate) the log file.
+        roll() {
+	    slog("Rolling log file "+this.path);
+            const now = new Date();
+            let rolledFileName = "";
+            if (this.rollingPattern && typeof this.rollingPattern === "string") {
+                // Compute timezone abbreviation similar to formatTimestamp.
+                const tzMatch = now.toTimeString().match(/\(([^)]+)\)$/);
+                const tz = tzMatch ? tzMatch[1].split(" ").map(w => w[0]).join("") : "";
+                rolledFileName = this.rollingPattern
+                    .replace(/yyyy/g, now.getFullYear())
+                    .replace(/mm/g, String(now.getMonth() + 1).padStart(2, '0'))
+                    .replace(/dd/g, String(now.getDate()).padStart(2, '0'))
+                    .replace(/hh/g, String(now.getHours()).padStart(2, '0'))
+                    .replace(/MM/g, String(now.getMinutes()).padStart(2, '0'))
+                    .replace(/ss/g, String(now.getSeconds()).padStart(2, '0'))
+                    .replace(/SSS/g, String(now.getMilliseconds()).padStart(3, '0'))
+                    .replace(/TZ/g, tz);
+            } else {
+                let base = this.path.toLowerCase().endsWith(".log")
+                    ? this.path.slice(0, -4)
+                    : this.path;
+                rolledFileName = `${base}-[${now.getTime()}].log`;
+            }
+	    slog("Rolling to "+rolledFileName);
+
+	    // actually roll the file.
+            try {
+                if (fs.existsSync(this.path)) fs.renameSync(this.path, rolledFileName);
+                this.currentFileSize = 0;
+                const dir = pathModule.dirname(this.path);
+                const baseName = pathModule.basename(this.path, ".log");
+                const pattern = new RegExp("^" + baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "-\\[.*\\]\\.log$");
+                let files = fs.readdirSync(dir).filter(f => pattern.test(f));
+                if (files.length > this.rotateMaxFiles) {
+                    files.sort();
+                    files.slice(0, files.length - this.rotateMaxFiles)
+                        .forEach(f => {
+                            try { fs.unlinkSync(pathModule.join(dir, f)); } catch (e) { console.error("Error deleting rolled file", f, e); }
+                        });
+                }
+            } catch (e) {
+                console.error("File rotation error:", e);
+            }
+
+	    // touch the new file.
+	    fs.appendFile(this.path, "", (err) => {
+                if (err) console.error("Error touching new file:", err);
+            });
+	    
+        }
+
+	flushBuffer_old() {
 	    if (this.buffer.length === 0) return;
 	    const data = this.buffer.join("\n") + "\n";
 	    this.buffer = [];
@@ -602,12 +676,24 @@
     }
 
     // -------------------------------------------------------------------------
+    // NEW: Global function to roll all file targets.
+    // -------------------------------------------------------------------------
+    function slogRollAllLogs() {
+	targets.forEach(target => {
+	    if (target instanceof FileTarget) {
+		target.roll();
+	    }
+	});
+    }
+
+    // -------------------------------------------------------------------------
     // Public API Export
     // -------------------------------------------------------------------------
     return {
 	sdebug, slog, swarn, serror,
 	csdebug, cslog, cswarn, cserror,
 	slogConfig, slogConfigAdd,
-	slogExpressEndpoint, slogParseLine
+	slogExpressEndpoint, slogParseLine,
+	slogRollAllLogs
     };
 });
