@@ -1,6 +1,6 @@
-// src/services/LocalAvatarManager.js
+// localAvatarManager.js
 import { EventEmitter } from "events";
-import { slog } from "../../../shared/slogger.js";
+import { slog, serror } from "../../../shared/slogger.js";
 import hostEnv from "../services/HostEnvironmentManager";
 
 class LocalAvatarManager extends EventEmitter {
@@ -16,23 +16,24 @@ class LocalAvatarManager extends EventEmitter {
 	    image: savedAvatar.image || null,
 	    size: 80,
 	    initials: savedAvatar.initials || this.getRandomInitials(),
-	    // Default: video is enabled and audio is off (you can adjust as needed)
 	    videoEnabled: savedAvatar.videoEnabled !== undefined ? savedAvatar.videoEnabled : true,
 	    audioEnabled: savedAvatar.audioEnabled !== undefined ? savedAvatar.audioEnabled : false,
 	    connectionStatus: "Disconnected",
-	    videoStream: null,
+	    videoStream: null, // We'll create once when we need it.
 	    userId: savedAvatar.userId || this.getOrCreatePersistentUserId(),
 	};
+
 	this.saveToStorage();
 	slog("Loaded local avatar with video logic", this.avatar);
-	// Attempt to initialize the camera stream based on videoEnabled flag.
-	this.updateMediaStream();
+
     }
 
     getRandomInitials() {
 	const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	return letters.charAt(Math.floor(Math.random() * 26)) +
-            letters.charAt(Math.floor(Math.random() * 26));
+	return (
+	    letters.charAt(Math.floor(Math.random() * 26)) +
+		letters.charAt(Math.floor(Math.random() * 26))
+	);
     }
 
     getOrCreatePersistentUserId() {
@@ -44,31 +45,39 @@ class LocalAvatarManager extends EventEmitter {
 	return uid;
     }
 
-    async updateMediaStream() {
-	// If video is disabled, stop any existing stream and update status.
-	if (!this.avatar.videoEnabled) {
-	    if (this.avatar.videoStream) {
-		this.avatar.videoStream.getTracks().forEach(track => track.stop());
-	    }
-	    this.avatar.videoStream = null;
-	    this.avatar.connectionStatus = "Video Off";
-	    this.emit("videoStreamUpdated");
-	    this.saveToStorage();
-	    return;
-	}
+    async getLocalVideoStream() {
+	// Instead of calling updateMediaStream() immediately, let's do it once we actually join a room or something similar.
+	// But if you want to do it here, you can:
+	await this.initializeStreamOnce();
 
-	// Request camera stream with constraints based on video/audio flags.
+	return this.avatar.videoStream;
+    }
+
+    async initializeStreamOnce() {
+	// If we already have a videoStream, do nothing
+	if (this.avatar.videoStream) return;
+
 	try {
+	    // Request camera stream with max constraints. We'll “mute” via track.enabled, not by stopping tracks.
 	    const constraints = {
-		video: this.avatar.videoEnabled,
-		audio: this.avatar.audioEnabled,
+		video: true,
+		audio: true,
 	    };
 	    const stream = await hostEnv.getCameraStream(constraints);
+
+	    if (!stream) {
+		serror("Host environment returned null stream!?");
+		throw new Error("Host env returned null stream!?");
+	    }
+	    
 	    this.avatar.videoStream = stream;
 	    this.avatar.connectionStatus = "Connected";
+	    slog("Camera stream acquired once", constraints);
+
+	    // Now apply our initial “enabled” flags
+	    this.applyTrackEnablement();
 	    this.emit("videoStreamUpdated");
 	    this.saveToStorage();
-	    slog("Camera stream acquired with constraints", constraints);
 	} catch (error) {
 	    console.error("Error obtaining camera stream", error);
 	    this.avatar.connectionStatus = "Error";
@@ -76,21 +85,57 @@ class LocalAvatarManager extends EventEmitter {
 	}
     }
 
-    // Update avatar preferences (including toggling video/audio) and refresh stream.
+    // Toggle the actual track.enabled fields based on our stored flags.
+    applyTrackEnablement() {
+	// con't bother if we're not live.
+	if (!this.avatar.videoStream) return;
+	// For each video track
+	const vtracks = this.avatar.videoStream.getVideoTracks();
+	vtracks.forEach((t) => {
+	    t.enabled = this.avatar.videoEnabled; 
+	});
+	// For each audio track
+	const atracks = this.avatar.videoStream.getAudioTracks();
+	atracks.forEach((t) => {
+	    t.enabled = this.avatar.audioEnabled;
+	});
+    }
+
+    // If user changes name/mood/color or toggles video/audio
     setAvatarData({ name, mood, color, image, videoEnabled, audioEnabled }) {
 	if (name) this.avatar.name = name;
 	if (mood) this.avatar.mood = mood;
 	if (color) this.avatar.color = color;
 	if (image) this.avatar.image = image;
-	if (videoEnabled !== undefined) this.avatar.videoEnabled = videoEnabled;
-	if (audioEnabled !== undefined) this.avatar.audioEnabled = audioEnabled;
-	this.saveToStorage();
-	// Emit a "preferencesUpdated" event so subscribers can update.
-	this.emit("preferencesUpdated");
-	// Refresh the media stream based on the new flags.
-	this.updateMediaStream();
-    }
 
+	if (videoEnabled !== undefined) {
+	    this.avatar.videoEnabled = videoEnabled;
+	}
+	if (audioEnabled !== undefined) {
+	    this.avatar.audioEnabled = audioEnabled;
+	}
+
+	// Update the stream if necessary.
+	this.initializeStreamOnce().then(() => {
+	    this.applyTrackEnablement();
+	    this.emit("videoStreamUpdated");
+	    this.saveToStorage();
+
+	        // Create an update payload that excludes non-serializable fields
+	    const {
+		videoStream,  // exclude
+		connectionStatus, // optionally exclude if you don't want it updated remotely
+		...avatarDataToPropagate
+	    } = this.avatar;
+	    
+	    // Emit an update event to the server if a socket exists.
+	    if (window.spotManager && window.spotManager.socket) {
+		window.spotManager.socket.emit("avatar-update",
+					       avatarDataToPropagate);
+	    }
+	});
+    }
+    
     setConnectionStatus(status) {
 	this.avatar.connectionStatus = status;
 	this.emit("statusChanged", status);
@@ -105,11 +150,12 @@ class LocalAvatarManager extends EventEmitter {
 	return this.avatar;
     }
 
-    toggleMuteVideo () {
+    // Optionally, simpler toggles:
+    toggleMuteVideo() {
 	this.setAvatarData({ videoEnabled: !this.avatar.videoEnabled });
     }
 
-    toggleMuteAudio (){
+    toggleMuteAudio() {
 	this.setAvatarData({ audioEnabled: !this.avatar.audioEnabled });
     }
 }

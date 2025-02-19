@@ -1,11 +1,21 @@
+// src/pages/Spot.js
 import React, { useState, useRef, useEffect } from "react";
 import styled from "@emotion/styled";
-import { List, ChatTeardropText, Users } from "@phosphor-icons/react";
-import { VideoCamera, VideoCameraSlash, Microphone, MicrophoneSlash } from '@phosphor-icons/react';
+import { css } from "@emotion/react";
+import {
+  List,
+  ChatTeardropText,
+  Users,
+  UserCircleDashed,
+  VideoCamera,
+  VideoCameraSlash,
+  Microphone,
+  MicrophoneSlash
+} from "@phosphor-icons/react";
+import { SketchPicker } from "react-color";
 import DividedLayout from "../components/DividedLayout";
 import { EventPane } from "../components/EventPane";
 import Avatar from "../components/Avatar";
-import ScrollLayout from "../components/ScrollLayout";
 import AvatarClusterLayout from "../components/AvatarClusterLayout";
 import AvatarHorizontalGridLayout from "../components/AvatarHorizontalGridLayout";
 import CommandLine from "../components/CommandLine";
@@ -15,7 +25,9 @@ import localAvatarManager from "../services/LocalAvatarManager";
 import remoteAvatarManager from "../services/RemoteAvatarManager";
 import { slog, serror } from "../../../shared/slogger.js";
 
-// Styled Components using Emotion
+// ----------------------------
+// Styled Components
+// ----------------------------
 const SpotContainer = styled.div`
   width: 100vw;
   height: 100vh;
@@ -59,7 +71,7 @@ const TitleText = styled.span`
 const MainContent = styled.div`
   position: absolute;
   top: 30px;
-  bottom: 40px; /* command line height will now be part of BottomBar */
+  bottom: 40px; /* Reserve space for bottom bar */
   left: 0;
   right: 0;
   overflow: hidden;
@@ -83,9 +95,9 @@ const SideMenu = styled.div`
   top: 30px;
   left: 0;
   width: 250px;
-  height: calc(100vh - 70px); /* 30px for title bar, 40px for bottom bar */
+  height: calc(100vh - 70px); /* 30px for title bar + 40px for bottom bar */
   background-color: rgba(0, 0, 0, 0.8);
-  transform: translateX(${(props) => (props.open ? "0" : "-100%")});
+  transform: translateX(${props => (props.open ? "0" : "-100%")});
   transition: transform 0.3s ease;
   z-index: 999;
   color: #fff;
@@ -94,7 +106,6 @@ const SideMenu = styled.div`
   overflow-y: auto;
 `;
 
-// NEW: Bottom bar container that holds the mute controls and command line.
 const BottomBar = styled.div`
   position: absolute;
   bottom: 0;
@@ -105,23 +116,55 @@ const BottomBar = styled.div`
   align-items: center;
   padding: 0 10px;
   box-sizing: border-box;
-  background: rgba(0, 0, 0, 0.5); /* Optional background for contrast */
+  background: rgba(0, 0, 0, 0.5);
   z-index: 1000;
 `;
 
-// NEW: Container for the mute buttons.
 const MuteControls = styled.div`
   display: flex;
   gap: 10px;
-  margin-right: 10px; /* Space between the icons and the command line */
+  margin-right: 10px;
 `;
 
+// The color picker popup. It is fixed so that its bottom edge aligns with the top of the bottom bar.
+// When hidden, it is translated down (i.e. off-screen behind the bottom bar).
+const ColorPickerPopup = styled.div`
+  position: absolute;
+  left: 50%;
+  bottom: 40px; /* Align bottom of popup with top of bottom bar */
+  transform: translateX(-50%) translateY(${props => (props.show ? "0" : "100%")});
+  opacity: ${props => (props.show ? 1 : 0)};
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+              opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 1100;
+`;
+
+const CommandLineWrapper = styled.div`
+  flex: 1;
+`;
+
+// ----------------------------
+// Spot Component
+// ----------------------------
 const Spot = () => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(
     localAvatarManager.getAvatarData().connectionStatus
   );
+  const [avatars, setAvatars] = useState(
+    remoteAvatarManager.getAvatarsForCurrentRoom()
+  );
+  const [localAvatar, setLocalAvatar] = useState(
+    localAvatarManager.getAvatarData()
+  );
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  // We'll position the color picker at bottom center.
+  // (It will animate in from below the bottom bar.)
+  
+  // Ref for the presence icon button (optional if you want to later use its position)
+  const colorButtonRef = useRef(null);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -132,7 +175,6 @@ const Spot = () => {
   const hasJoined = useRef(false);
   useEffect(() => {
     slog("Spot.js: useEffect mounted");
-
     if (!hasJoined.current) {
       slog("Spot.js: joinSpot('lobby')");
       spotManager.joinSpot("lobby")
@@ -151,13 +193,6 @@ const Spot = () => {
     };
   }, []);
 
-  const [avatars, setAvatars] = useState(
-    remoteAvatarManager.getAvatarsForCurrentRoom()
-  );
-  const [localAvatar, setLocalAvatar] = useState(
-    localAvatarManager.getAvatarData()
-  );
-
   useEffect(() => {
     const updateAvatars = () => {
       setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
@@ -173,7 +208,7 @@ const Spot = () => {
     };
   }, []);
 
-  // Use navigator.sendBeacon to notify the server when the page unloads.
+  // Send a beacon on unload.
   useEffect(() => {
     const sendLeaveBeacon = () => {
       const payload = JSON.stringify({
@@ -185,12 +220,12 @@ const Spot = () => {
     };
 
     const handleBeforeUnload = () => {
-      console.error("---------- Refresh: sending /leave-spot via beforeunload");
+      console.error("Beforeunload: sending /leave-spot");
       sendLeaveBeacon();
     };
 
     const handlePageHide = () => {
-      console.error("---------- Refresh: sending /leave-spot via pagehide");
+      console.error("Pagehide: sending /leave-spot");
       sendLeaveBeacon();
     };
 
@@ -202,12 +237,13 @@ const Spot = () => {
     };
   }, []);
 
-  const toggleMenu = () => setMenuOpen((prev) => !prev);
+  const toggleMenu = () => setMenuOpen(prev => !prev);
 
-  // Render the message area using EventPane.
-  const renderMessageArea = () => <EventPane />;
+  // Toggle the color picker popup.
+  const toggleColorPicker = () => {
+    setShowColorPicker(prev => !prev);
+  };
 
-  // Render the avatar area.
   const renderAvatarArea = () => (
     <DividedLayout orientation="horizontal" initialPrimaryRatio={0.80}>
       <AvatarClusterContainer>
@@ -230,7 +266,8 @@ const Spot = () => {
     </DividedLayout>
   );
 
-  // Desktop layout: side-by-side vertical DividedLayout.
+  const renderMessageArea = () => <EventPane />;
+
   const renderDesktopContent = () => (
     <DividedLayout
       orientation="vertical"
@@ -255,11 +292,6 @@ const Spot = () => {
     localAvatarManager.setAvatarData({ audioEnabled: !current.audioEnabled });
   };
 
-    // NEW: Wrap the CommandLine in its own flex container.
-    const CommandLineWrapper = styled.div`
-  flex: 1; /* take up remaining space */
-`;
-
   return (
     <SpotContainer>
       <TitleBar>
@@ -269,13 +301,12 @@ const Spot = () => {
         <TitleText>Lobby</TitleText>
       </TitleBar>
       <MainContent>{renderDesktopContent()}</MainContent>
-      {/* New BottomBar containing mute controls and CommandLine */}
       <BottomBar>
         <MuteControls>
           <button
             onClick={toggleMuteVideo}
             aria-label="Toggle video"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ background: "none", border: "none", cursor: "pointer" }}
           >
             {localAvatarManager.getAvatarData().videoEnabled ? (
               <VideoCamera size={24} color="#fff" />
@@ -286,7 +317,7 @@ const Spot = () => {
           <button
             onClick={toggleMuteAudio}
             aria-label="Toggle audio"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            style={{ background: "none", border: "none", cursor: "pointer" }}
           >
             {localAvatarManager.getAvatarData().audioEnabled ? (
               <Microphone size={24} color="#fff" />
@@ -294,11 +325,29 @@ const Spot = () => {
               <MicrophoneSlash size={24} color="#fff" />
             )}
           </button>
-          </MuteControls>
-	  <CommandLineWrapper>
-              <CommandLine />
-	  </CommandLineWrapper>
+          <button
+            ref={colorButtonRef}
+            onClick={toggleColorPicker}
+            aria-label="Choose color"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+          >
+            <UserCircleDashed size={24} color="#fff" />
+          </button>
+        </MuteControls>
+        <CommandLineWrapper>
+          <CommandLine />
+        </CommandLineWrapper>
       </BottomBar>
+      {/** Color picker popup that animates up from behind the bottom bar */}
+      <ColorPickerPopup show={showColorPicker}>
+        <SketchPicker
+          color={localAvatar.color}
+          onChangeComplete={(colorResult) => {
+            localAvatarManager.setAvatarData({ color: colorResult.hex });
+            setShowColorPicker(false);
+          }}
+        />
+      </ColorPickerPopup>
       <SideMenu open={menuOpen}>
         <h4>Side Menu</h4>
         <p>Menu content or navigation links can go here.</p>

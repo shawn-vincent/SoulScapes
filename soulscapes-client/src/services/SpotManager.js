@@ -63,6 +63,17 @@ class SpotManager {
     this.socket.safeOn("user-joined", this.handleNewUser.bind(this));
     this.socket.safeOn("user-left", this.handleUserLeft.bind(this));
 
+      this.socket.safeOn("avatar-update", ({ id, avatar }) => {
+	  // Update the remote avatar if it exists.
+	  if (remoteAvatarManager.avatars[id]) {
+	      remoteAvatarManager.avatars[id] = {
+		  ...remoteAvatarManager.avatars[id],
+		  ...avatar,
+	      };
+	      remoteAvatarManager.emit("updated");
+	  }
+      });
+      
     this.socket.safeOn("offer", this.handleOffer.bind(this));
     this.socket.safeOn("answer", this.handleAnswer.bind(this));
     this.socket.safeOn("ice-candidate", this.handleIceCandidate.bind(this));
@@ -138,7 +149,8 @@ class SpotManager {
 
     let localStream;
     try {
-      localStream = await hostEnv.getCameraStream({ video: true, audio: false });
+      // Use the local video stream from LocalAvatarManager
+      localStream = await localAvatarManager.getLocalVideoStream();
     } catch (err) {
       serror(`SpotManager: Failed to obtain local camera stream for call with ${peerId}`, err);
     }
@@ -216,7 +228,8 @@ class SpotManager {
 
     let localStream;
     try {
-      localStream = await hostEnv.getCameraStream({ video: true, audio: false });
+      // Use the local video stream from LocalAvatarManager
+      localStream = await localAvatarManager.getLocalVideoStream();
     } catch (err) {
       serror(`SpotManager: Failed to obtain local camera stream for call with ${sender}`, err);
     }

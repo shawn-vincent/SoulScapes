@@ -1,138 +1,141 @@
 // src/components/Avatar.js
 import React, { useEffect, useRef, useState } from 'react';
-import { CameraSlash } from '@phosphor-icons/react';
+import { VideoCameraSlash, MicrophoneSlash } from '@phosphor-icons/react';
+import LocalAvatarManager from '../services/LocalAvatarManager';
 
 const Avatar = ({ data, onUpdate }) => {
-    const videoRef = useRef(null);
-    const [videoStatus, setVideoStatus] = useState("Loading video...");
-    const currentStream = useRef(null);
+  const videoRef = useRef(null);
+  const [videoStatus, setVideoStatus] = useState("Loading video...");
+  const currentStream = useRef(null);
 
-    // Attach or detach the video stream when data changes.
-    useEffect(() => {
-	const videoEl = videoRef.current;
-	if (!videoEl) return;
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+    let cleanup = () => {};
 
-	if (data.videoEnabled && data.videoStream) {
-	    if (currentStream.current === data.videoStream) return;
+    if (data.videoEnabled) {
+      const attachVideo = async () => {
+        let stream;
+        if (data.local) {
+          // For local avatars, fetch the local video stream.
+          stream = await LocalAvatarManager.getLocalVideoStream();
+        } else {
+          // For remote avatars, use the provided remote video stream.
+          stream = data.videoStream;
+        }
 
-	    currentStream.current = data.videoStream;
-	    videoEl.srcObject = data.videoStream;
-	    setVideoStatus("Loading video...");
+        // If the stream is already attached, do nothing.
+        if (currentStream.current === stream) return;
 
-	    const handleCanPlay = () => {
-		videoEl.play()
-		    .then(() => setVideoStatus("Playing"))
-		    .catch((err) => {
-			console.error("Error in video play() promise:", err);
-			setVideoStatus("Error playing video");
-		    });
-	    };
+        currentStream.current = stream;
+        videoEl.srcObject = stream;
+        setVideoStatus("Loading video...");
 
-	    const handleLoadedMetadata = () => {
-		// Optionally log metadata loaded.
-	    };
+        const handleCanPlay = () => {
+          videoEl
+            .play()
+            .then(() => setVideoStatus("Playing"))
+            .catch((err) => {
+              console.error("Error in video play() promise:", err);
+              setVideoStatus("Error playing video");
+            });
+        };
 
-	    const handleVideoError = (event) => {
-		const error = event?.target?.error;
-		console.error("Video element error:", error);
-		setVideoStatus("Video error" + (error ? `: ${error.message}` : ""));
-	    };
+        const handleLoadedMetadata = () => {
+          // Optionally log metadata loaded.
+        };
 
-	    videoEl.addEventListener("canplay", handleCanPlay);
-	    videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
-	    videoEl.addEventListener("error", handleVideoError);
+        const handleVideoError = (event) => {
+          const error = event?.target?.error;
+          console.error("Video element error:", error);
+          setVideoStatus("Video error" + (error ? `: ${error.message}` : ""));
+        };
 
-	    return () => {
-		videoEl.removeEventListener("canplay", handleCanPlay);
-		videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
-		videoEl.removeEventListener("error", handleVideoError);
-	    };
-	} else {
-	    videoEl.srcObject = null;
-	    setVideoStatus(data.videoEnabled ? "Loading video..." : "Video Off");
-	}
-    }, [data.videoStream, data.videoEnabled]);
+        videoEl.addEventListener("canplay", handleCanPlay);
+        videoEl.addEventListener("loadedmetadata", handleLoadedMetadata);
+        videoEl.addEventListener("error", handleVideoError);
 
-    // Determine overlay content based on status.
-    let overlayContent = null;
-    if (!data.videoEnabled) {
-	// When video is turned off, show initials and connection status.
-	overlayContent = (
-	    <div style={{
-		     display: "flex",
-		     flexDirection: "column",
-		     alignItems: "center",
-		     justifyContent: "center",
-		     backgroundColor: "rgba(0,0,0,0.7)",
-		     borderRadius: "50%",
-		     width: "100%",
-		     height: "100%",
-		     color: "#fff"
-		 }}>
-		<span style={{ fontSize: "1.2em" }}>{data.initials}</span>
-		<div style={{ marginTop: 5, fontSize: "0.8em" }}>{data.connectionStatus}</div>
-	    </div>
-	);
-    } else if (videoStatus !== "Playing") {
-	// If not playing (including when an error occurs), display the status.
-	overlayContent = (
-	    <div style={{
-		     display: "flex",
-		     alignItems: "center",
-		     justifyContent: "center",
-		     backgroundColor: "rgba(0,0,0,0.7)",
-		     borderRadius: "50%",
-		     width: "100%",
-		     height: "100%",
-		     color: "#fff"
-		 }}>
-		<span style={{ fontSize: "0.9em" }}>{videoStatus}</span>
-	    </div>
-	);
+        cleanup = () => {
+          videoEl.removeEventListener("canplay", handleCanPlay);
+          videoEl.removeEventListener("loadedmetadata", handleLoadedMetadata);
+          videoEl.removeEventListener("error", handleVideoError);
+        };
+      };
+
+      attachVideo();
+    } else {
+      videoEl.srcObject = null;
+      setVideoStatus("Video Off");
+      currentStream.current = null; // Clear stored stream reference when video is disabled.
     }
 
-    // Outer container style.
-    const avatarStyle = {
-	position: "relative",
-	width: `${data.size}px`,
-	height: `${data.size}px`,
-	borderRadius: "50%",
-	backgroundColor: "black",
-	border: `3px solid ${data.color}`,
-	overflow: "hidden"
-    };
+    return cleanup;
+  }, [data.videoStream, data.videoEnabled]);
 
-    const videoStyle = {
-	width: "100%",
-	height: "100%",
-	objectFit: "cover",
-	borderRadius: "50%",
-        transform: data.local ? "scaleX(-1)" : "none"  // mirror local video feed
+  // Badge styles for the top overlay.
+  const badgeStyle = {
+    position: "absolute",
+    top: "-10px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    color: "#fff",
+    padding: "3px 8px",
+    borderRadius: "5px",
+    fontSize: "12px",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  };
 
-    };
-
-    return (
-	<div style={{ position: "relative", cursor: "pointer" }}>
-	    <div style={avatarStyle}>
-		<video ref={videoRef} muted playsInline style={videoStyle} />
-		{overlayContent}
-	    </div>
-	    {/* Badge with initials and connection status */}
-	    <div style={{
-		     position: "absolute",
-		     top: "-10px",
-		     left: "50%",
-		     transform: "translateX(-50%)",
-		     backgroundColor: "rgba(0, 0, 0, 0.7)",
-		     color: "#fff",
-		     padding: "3px 8px",
-		     borderRadius: "5px",
-		     fontSize: "12px",
-		 }}>
-		{data.initials} {data.connectionStatus}
-	    </div>
-	</div>
+  const badgeContent =
+    data.connectionStatus === "Connected" ? (
+      <>
+        <span>{data.initials}</span>
+        {data.videoEnabled === false && (
+          <VideoCameraSlash size={12} color="#fff" />
+        )}
+        {data.audioEnabled === false && (
+          <MicrophoneSlash size={12} color="#fff" />
+        )}
+      </>
+    ) : (
+      <>
+        <span>{data.initials}</span>
+        <span>{data.connectionStatus}</span>
+      </>
     );
+
+  // The avatar container uses the local color for its border and glow.
+  // When video is off, the background is set to data.color.
+  const avatarStyle = {
+    position: "relative",
+    width: `${data.size}px`,
+    height: `${data.size}px`,
+    borderRadius: "50%",
+    backgroundColor: data.videoEnabled ? "black" : data.color,
+    border: `3px solid ${data.color}`,
+    overflow: "hidden",
+    boxShadow: `0 0 20px 5px ${data.color}`,
+    transition: "background-color 0.3s ease, box-shadow 0.3s ease",
+  };
+
+  const videoStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    borderRadius: "50%",
+    transform: data.local ? "scaleX(-1)" : "none", // mirror local video feed
+  };
+
+  return (
+    <div style={{ position: "relative", cursor: "pointer" }}>
+      <div style={avatarStyle}>
+        <video ref={videoRef} muted={data.local} playsInline style={videoStyle} />
+      </div>
+      <div style={badgeStyle}>{badgeContent}</div>
+    </div>
+  );
 };
 
 export default Avatar;
