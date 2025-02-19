@@ -2,12 +2,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled from "@emotion/styled";
 import {
-    List,
-    VideoCamera,
-    VideoCameraSlash,
-    Microphone,
-    MicrophoneSlash,
-    UserCircleDashed
+  List,
+  VideoCamera,
+  VideoCameraSlash,
+  Microphone,
+  MicrophoneSlash,
+  UserCircleDashed,
+  CaretDown
 } from "@phosphor-icons/react";
 import { SketchPicker } from "react-color";
 import { EventPane } from "../components/EventPane";
@@ -20,7 +21,9 @@ import localAvatarManager from "../services/LocalAvatarManager";
 import remoteAvatarManager from "../services/RemoteAvatarManager";
 import { slog, serror } from "../../../shared/slogger.js";
 
-// Overall container – background removed from here; it now lives in the scrollable content.
+/*  
+  The SpotContainer remains the full-screen container.
+*/
 const SpotContainer = styled.div`
   width: 100vw;
   height: 100vh;
@@ -29,7 +32,9 @@ const SpotContainer = styled.div`
   background: black;
 `;
 
-// Fixed top bar (unchanged).
+/*  
+  TitleBar remains fixed at the top.
+*/
 const TitleBar = styled.div`
   position: absolute;
   top: 0;
@@ -60,58 +65,56 @@ const TitleText = styled.span`
   text-overflow: ellipsis;
 `;
 
-// NEW: MainContent is now our scrollable area between the fixed top and bottom bars.
+/*  
+  MainContent now has a fixed background image that fills the area between the top and bottom bars.
+  The background does not scroll.
+*/
 const MainContent = styled.div`
   position: absolute;
   top: 30px;
-  bottom: 40px; /* Leaves room for the fixed bottom bar */
+  bottom: 40px; /* Leaves room for fixed BottomBar */
   left: 0;
   right: 0;
-  overflow-y: scroll;
+  overflow: hidden;
+  background: url('https://upload.wikimedia.org/wikipedia/commons/4/43/Mountain_top_scenic.jpg')
+    no-repeat center;
+  background-size: cover;
   z-index: 1;
 `;
 
-// NEW: ScrollableContent is twice as tall and its background is split:
-// top half is a gradient, bottom half is the original background image.
-const ScrollableContent = styled.div`
-  height: 200%;
-  background: 
-    linear-gradient(to bottom, black 0%, skyblue 50%, white 100%) no-repeat,
-    url('https://upload.wikimedia.org/wikipedia/commons/4/43/Mountain_top_scenic.jpg') no-repeat;
-  background-size: 100% 50%, 100% 50%;
-  background-position: top, bottom;
-  position: relative;
-`;
-
-// NEW: ContentWrapper holds the interactive content and is fixed to the bottom half.
-const ContentWrapper = styled.div`
+/*  
+  MessageWrapper is a scrollable container that sits over MainContent.
+  It is positioned at the bottom and uses column-reverse flex so that its content starts at the bottom.
+*/
+const MessageWrapper = styled.div`
   position: absolute;
   bottom: 0;
-  width: 100%;
-  height: 50%;
+  left: 50%;
+  width: 400px;
+  max-height: 100%;
+  transform: translateX(-50%);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column-reverse;
+  z-index: 4;
 `;
 
-// Remote avatar space fills the entire main content area.
+/*  
+  RemoteAvatarSpace remains absolutely positioned over MainContent.
+  (Adjust its positioning as needed.)
+*/
 const RemoteAvatarSpace = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 2;
 `;
 
-// Floating messages panel remains centered.
-const MessagesPanel = styled.div`
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 400px;
-  height: 100%;
-  transform: translateX(-50%);
-  z-index: 4;
-`;
-
-// Fixed bottom bar.
+/*  
+  Fixed bottom bar remains unchanged.
+*/
 const BottomBar = styled.div`
   position: absolute;
   bottom: 0;
@@ -179,208 +182,278 @@ const SideMenu = styled.div`
   overflow-y: auto;
 `;
 
+/*  
+  Optionally, you can keep the scroll-down affordance if desired.
+*/
+const ScrollDownButton = styled.button`
+  position: absolute;
+  bottom: 50px; /* 10px above BottomBar */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  padding: 5px;
+  cursor: pointer;
+  z-index: 1100;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
 const Spot = () => {
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [showColorPicker, setShowColorPicker] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState(
-        localAvatarManager.getAvatarData().connectionStatus
-    );
-    const [avatars, setAvatars] = useState(
-        remoteAvatarManager.getAvatarsForCurrentRoom()
-    );
-    const [localAvatar, setLocalAvatar] = useState(
-        localAvatarManager.getAvatarData()
-    );
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(
+    localAvatarManager.getAvatarData().connectionStatus
+  );
+  const [avatars, setAvatars] = useState(
+    remoteAvatarManager.getAvatarsForCurrentRoom()
+  );
+  const [localAvatar, setLocalAvatar] = useState(
+    localAvatarManager.getAvatarData()
+  );
+  // State to show/hide the scroll-down affordance.
+  const [showScrollDown, setShowScrollDown] = useState(false);
 
-    // Declare mainContentRef so we can scroll it.
-    const mainContentRef = useRef(null);
+  // Declare ref for MainContent.
+  const mainContentRef = useRef(null);
+  // We'll also need a ref for the MessageWrapper to measure its content height.
+  const messageWrapperRef = useRef(null);
 
-    // Listen for window resize if needed.
-    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-    useEffect(() => {
-        const handleResize = () => setWindowWidth(window.innerWidth);
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, []);
-
-    // On mount, join the "lobby" (only once).
-    const hasJoined = useRef(false);
-    useEffect(() => {
-        slog("Spot.js: useEffect mounted");
-        if (!hasJoined.current) {
-            slog("Spot.js: joinSpot('lobby')");
-            spotManager.joinSpot("lobby")
-                .then(() => {
-                    slog("Spot.js: joinSpot resolved");
-                })
-                .catch((err) => {
-                    serror("Spot.js: Error during joinSpot", err);
-                });
-            hasJoined.current = true;
-        }
-        const updateStatus = (status) => setConnectionStatus(status);
-        localAvatarManager.on("statusChanged", updateStatus);
-        return () => {
-            localAvatarManager.off("statusChanged", updateStatus);
-        };
-    }, []);
-
-    useEffect(() => {
-        const updateAvatars = () => {
-            setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
-        };
-        const updateLocalAvatar = () => {
-            setLocalAvatar({ ...localAvatarManager.getAvatarData() });
-        };
-        remoteAvatarManager.on("updated", updateAvatars);
-        localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
-        return () => {
-            remoteAvatarManager.off("updated", updateAvatars);
-            localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
-        };
-    }, []);
-
-    // Send a beacon on unload.
-    useEffect(() => {
-        const sendLeaveBeacon = () => {
-            const payload = JSON.stringify({
-                spot: spotManager.spot,
-                id: spotManager.socket.id,
-            });
-            const blob = new Blob([payload], { type: "application/json" });
-            navigator.sendBeacon("/leave-spot", blob);
-        };
-
-        const handleBeforeUnload = () => {
-            slog("Beforeunload: sending /leave-spot");
-            sendLeaveBeacon();
-        };
-
-        const handlePageHide = () => {
-            slog("Pagehide: sending /leave-spot");
-            sendLeaveBeacon();
-        };
-
-        window.addEventListener("beforeunload", handleBeforeUnload);
-        window.addEventListener("pagehide", handlePageHide);
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-            window.removeEventListener("pagehide", handlePageHide);
-        };
-    }, []);
-
-    const toggleMenu = () => setMenuOpen(prev => !prev);
-    const toggleColorPicker = () => setShowColorPicker(prev => !prev);
-
-    // Toggle local video and audio.
-    const toggleMuteVideo = () => {
-        const current = localAvatarManager.getAvatarData();
-        localAvatarManager.setAvatarData({ videoEnabled: !current.videoEnabled });
+  // On mount, join the "lobby" (only once).
+  const hasJoined = useRef(false);
+  useEffect(() => {
+    slog("Spot.js: useEffect mounted");
+    if (!hasJoined.current) {
+      slog("Spot.js: joinSpot('lobby')");
+      spotManager.joinSpot("lobby")
+        .then(() => {
+          slog("Spot.js: joinSpot resolved");
+        })
+        .catch((err) => {
+          serror("Spot.js: Error during joinSpot", err);
+        });
+      hasJoined.current = true;
+    }
+    const updateStatus = (status) => setConnectionStatus(status);
+    localAvatarManager.on("statusChanged", updateStatus);
+    return () => {
+      localAvatarManager.off("statusChanged", updateStatus);
     };
-    const toggleMuteAudio = () => {
-        const current = localAvatarManager.getAvatarData();
-        localAvatarManager.setAvatarData({ audioEnabled: !current.audioEnabled });
+  }, []);
+
+  useEffect(() => {
+    const updateAvatars = () => {
+      setAvatars([...remoteAvatarManager.getAvatarsForCurrentRoom()]);
+    };
+    const updateLocalAvatar = () => {
+      setLocalAvatar({ ...localAvatarManager.getAvatarData() });
+    };
+    remoteAvatarManager.on("updated", updateAvatars);
+    localAvatarManager.on("videoStreamUpdated", updateLocalAvatar);
+    return () => {
+      remoteAvatarManager.off("updated", updateAvatars);
+      localAvatarManager.off("videoStreamUpdated", updateLocalAvatar);
+    };
+  }, []);
+
+  // Beacon on unload.
+  useEffect(() => {
+    const sendLeaveBeacon = () => {
+      const payload = JSON.stringify({
+        spot: spotManager.spot,
+        id: spotManager.socket.id,
+      });
+      const blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon("/leave-spot", blob);
     };
 
-    // NEW: After MainContent is rendered, force scroll to bottom.
-    useEffect(() => {
+    const handleBeforeUnload = () => {
+      slog("Beforeunload: sending /leave-spot");
+      sendLeaveBeacon();
+    };
+
+    const handlePageHide = () => {
+      slog("Pagehide: sending /leave-spot");
+      sendLeaveBeacon();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, []);
+
+  const toggleMenu = () => setMenuOpen(prev => !prev);
+  const toggleColorPicker = () => setShowColorPicker(prev => !prev);
+
+  // Toggle local video and audio.
+  const toggleMuteVideo = () => {
+    const current = localAvatarManager.getAvatarData();
+    localAvatarManager.setAvatarData({ videoEnabled: !current.videoEnabled });
+  };
+  const toggleMuteAudio = () => {
+    const current = localAvatarManager.getAvatarData();
+    localAvatarManager.setAvatarData({ audioEnabled: !current.audioEnabled });
+  };
+
+  // Function to scroll the MessageWrapper to the bottom.
+  const scrollMessagesToBottom = () => {
+    if (messageWrapperRef.current) {
+      messageWrapperRef.current.scrollTo({
+        top: messageWrapperRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  // Listen for scroll events on MainContent to show/hide the scroll-down affordance.
+  useEffect(() => {
+    const handleScroll = () => {
       if (mainContentRef.current) {
-        // Use a timeout to ensure all content has loaded.
-        setTimeout(() => {
-          mainContentRef.current.scrollTop = mainContentRef.current.scrollHeight;
-        }, 0);
+        const { scrollTop, clientHeight, scrollHeight } = mainContentRef.current;
+        if (scrollTop + clientHeight < scrollHeight - 10) {
+          setShowScrollDown(true);
+        } else {
+          setShowScrollDown(false);
+        }
       }
-    }, []);
+    };
 
-    return (
-        <SpotContainer>
-            <TitleBar>
-                <Hamburger onClick={toggleMenu} aria-label="Toggle menu">
-                    <List size={24} weight="regular" color="#fff" />
-                </Hamburger>
-                <TitleText>Lobby</TitleText>
-            </TitleBar>
+    const mc = mainContentRef.current;
+    if (mc) {
+      mc.addEventListener("scroll", handleScroll);
+      handleScroll(); // initial check
+    }
+    return () => {
+      if (mc) {
+        mc.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, []);
 
-            {/* NEW: Scrollable main content area */}
-            <MainContent ref={mainContentRef}>
-                <ScrollableContent>
-                    <ContentWrapper>
-                        <RemoteAvatarSpace>
-                            <AvatarClusterLayout avatarSize={80}>
-                                {avatars.map((avatar) => (
-                                    <Avatar key={avatar.id} data={avatar} />
-                                ))}
-                            </AvatarClusterLayout>
-                        </RemoteAvatarSpace>
-                        <MessagesPanel>
-                            <EventPane />
-                        </MessagesPanel>
-                    </ContentWrapper>
-                </ScrollableContent>
-            </MainContent>
+  // Ensure MainContent starts scrolled to the bottom on mount.
+  useEffect(() => {
+    if (mainContentRef.current) {
+      setTimeout(() => {
+        mainContentRef.current.scrollTop = mainContentRef.current.scrollHeight;
+      }, 0);
+    }
+  }, []);
 
-            {/* Fixed bottom bar */}
-            <BottomBar>
-                <MuteControls>
-                    <button
-                        onClick={toggleMuteVideo}
-                        aria-label="Toggle video"
-                        style={{ background: "none", border: "none", cursor: "pointer" }}
-                    >
-                        {localAvatarManager.getAvatarData().videoEnabled ? (
-                            <VideoCamera size={24} color="#fff" />
-                        ) : (
-                            <VideoCameraSlash size={24} color="#fff" />
-                        )}
-                    </button>
-                    <button
-                        onClick={toggleMuteAudio}
-                        aria-label="Toggle audio"
-                        style={{ background: "none", border: "none", cursor: "pointer" }}
-                    >
-                        {localAvatarManager.getAvatarData().audioEnabled ? (
-                            <Microphone size={24} color="#fff" />
-                        ) : (
-                            <MicrophoneSlash size={24} color="#fff" />
-                        )}
-                    </button>
-                    <button
-                        onClick={toggleColorPicker}
-                        aria-label="Choose color"
-                        style={{ background: "none", border: "none", cursor: "pointer" }}
-                    >
-                        <span style={{ color: "#fff", fontSize: "24px" }}>
-                            <UserCircleDashed size={24} color="#fff" />
-                        </span>
-                    </button>
-                </MuteControls>
-                <CommandLineWrapper>
-                    <CommandLine />
-                </CommandLineWrapper>
-                <LocalAvatarWrapper>
-                    <LocalAvatarPositioner>
-                        <Avatar data={{ ...localAvatarManager.getAvatarData(), connectionStatus }} />
-                    </LocalAvatarPositioner>
-                </LocalAvatarWrapper>
-            </BottomBar>
+  return (
+    <SpotContainer>
+      <TitleBar>
+        <Hamburger onClick={toggleMenu} aria-label="Toggle menu">
+          <List size={24} weight="regular" color="#fff" />
+        </Hamburger>
+        <TitleText>Lobby</TitleText>
+      </TitleBar>
 
-            {/* Color picker popup */}
-            <ColorPickerPopup show={showColorPicker}>
-                <SketchPicker
-                    color={localAvatarManager.getAvatarData().color}
-                    onChangeComplete={(colorResult) => {
-                        localAvatarManager.setAvatarData({ color: colorResult.hex });
-                        setShowColorPicker(false);
-                    }}
-                />
-            </ColorPickerPopup>
-            {/* Optional side menu */}
-            <SideMenu open={menuOpen}>
-                <h4>Side Menu</h4>
-                <p>Menu content or navigation links can go here.</p>
-            </SideMenu>
-        </SpotContainer>
-    );
+      {/* MainContent with fixed background */}
+      <MainContent ref={mainContentRef} 
+        style={{
+          background: `url('https://upload.wikimedia.org/wikipedia/commons/4/43/Mountain_top_scenic.jpg') no-repeat center`,
+          backgroundSize: "cover"
+        }}
+      >
+        {/* Remote avatars (if needed) */}
+        <RemoteAvatarSpace>
+          <AvatarClusterLayout avatarSize={80}>
+            {avatars.map((avatar) => (
+              <Avatar key={avatar.id} data={avatar} />
+            ))}
+          </AvatarClusterLayout>
+        </RemoteAvatarSpace>
+
+        {/* MessageWrapper: scrollable container for messages; flex column-reverse so that messages start at the bottom */}
+        <MessageWrapper ref={messageWrapperRef}>
+          <EventPane />
+        </MessageWrapper>
+      </MainContent>
+
+      {/* Optional scroll-down affordance */}
+      {showScrollDown && (
+        <ScrollDownButton onClick={() => {
+          if (mainContentRef.current) {
+            mainContentRef.current.scrollTo({
+              top: mainContentRef.current.scrollHeight,
+              behavior: "smooth",
+            });
+          }
+        }}>
+          <CaretDown size={24} weight="bold" />
+        </ScrollDownButton>
+      )}
+
+      {/* Fixed bottom bar */}
+      <BottomBar>
+        <MuteControls>
+          <button
+            onClick={toggleMuteVideo}
+            aria-label="Toggle video"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+          >
+            {localAvatarManager.getAvatarData().videoEnabled ? (
+              <VideoCamera size={24} color="#fff" />
+            ) : (
+              <VideoCameraSlash size={24} color="#fff" />
+            )}
+          </button>
+          <button
+            onClick={toggleMuteAudio}
+            aria-label="Toggle audio"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+          >
+            {localAvatarManager.getAvatarData().audioEnabled ? (
+              <Microphone size={24} color="#fff" />
+            ) : (
+              <MicrophoneSlash size={24} color="#fff" />
+            )}
+          </button>
+          <button
+            onClick={toggleColorPicker}
+            aria-label="Choose color"
+            style={{ background: "none", border: "none", cursor: "pointer" }}
+          >
+            <span style={{ color: "#fff", fontSize: "24px" }}>
+              <UserCircleDashed size={24} color="#fff" />
+            </span>
+          </button>
+        </MuteControls>
+        <CommandLineWrapper>
+          <CommandLine />
+        </CommandLineWrapper>
+        <LocalAvatarWrapper>
+          <LocalAvatarPositioner>
+            <Avatar data={{ ...localAvatarManager.getAvatarData(), connectionStatus }} />
+          </LocalAvatarPositioner>
+        </LocalAvatarWrapper>
+      </BottomBar>
+
+      {/* Color picker popup */}
+      <ColorPickerPopup show={showColorPicker}>
+        <SketchPicker
+          color={localAvatarManager.getAvatarData().color}
+          onChangeComplete={(colorResult) => {
+            localAvatarManager.setAvatarData({ color: colorResult.hex });
+            setShowColorPicker(false);
+          }}
+        />
+      </ColorPickerPopup>
+
+      {/* Optional side menu */}
+      <SideMenu open={menuOpen}>
+        <h4>Side Menu</h4>
+        <p>Menu content or navigation links can go here.</p>
+      </SideMenu>
+    </SpotContainer>
+  );
 };
 
 export default Spot;
+
